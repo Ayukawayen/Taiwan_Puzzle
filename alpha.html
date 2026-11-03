@@ -1,4 +1,4 @@
-<title>台灣拼圖合成 v6</title>
+<title>台灣拼圖合成 v7</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -156,7 +156,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
 <div id="app">
   <header class="top">
     <h1>台灣拼圖合成</h1>
-    <span class="tag">物理原型 v6 · 本島 19 塊 + 澎湖</span>
+    <span class="tag">物理原型 v7 · 本島 19 塊 + 澎湖</span>
     <span class="spacer"></span>
     <button id="btnSettings" type="button">調參</button>
     <button id="btnEnd" type="button" class="danger">結束</button>
@@ -296,6 +296,11 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
  *   新剛體依真實地理相對位置擺放，質心守恆，動量與角動量守恆，朝向取質量加權平均。
  *   畫面用補間（tween）從舊姿態滑到新姿態，物理已在新姿態上。
  *   新區塊與其他拼圖重疊時只做「垂直上推」：新區塊上升，被它掃過或壓在它上面的區塊（含連鎖）一起被推高。
+ *
+ * 接觸上下關係（V7）
+ *   每一步從 Box2D 的接觸（法向量）記錄「縣市 a 與縣市 b 的接觸線上誰在上」：rel[a][b] = −rel[b][a]。
+ *   以縣市為索引（不隨合併改變）；兩個區塊的關係＝雙方成員所有組合的彙總。
+ *   上推時決定「兩個區塊誰在上」：先看最近仍有效的接觸關係，沒有（或上下混雜、或代價過大）才用幾何（所需位移較小的方向）。
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -334,6 +339,12 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     shakeVy: 3.2,            // m/s 向上
     shakeSpin: 1.2,          // rad/s
     tweenSec: 0.28,          // 合併補間時間
+    relTTL: 1.5,             // 接觸上下關係的有效秒數（最後一次接觸後）
+    relMinNy: 0.5,           // 法向量垂直分量 ≥ 此值才算「上下」接觸（約 60° 以內）；更斜的視為並排，不給上下資訊
+    relMixed: 0.34,          // 兩個區塊之間上、下兩種關係都有，且較少的一方佔較多一方的比例 ≥ 此值 → 視為混雜，不採用
+    relMaxRot: 90,           // 合併時區塊被轉超過這個角度（度）→ 該區塊成員的舊關係不採用（接近翻面才排除）
+    relCapPx: 200,           // 依接觸關係強制方向所需的上推，比幾何方向多出超過此值（px）→ 改用幾何方向
+    liftByContact: true,     // 測試用：false＝V6 的純幾何判斷
     stuckSec: 7,             // 全部放下且靜止多久後提示卡關
     dt: 1 / 240,
     velIter: 10,
@@ -386,6 +397,10 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     let events = [];
     let acc = 0;
     let simSteps = 0;
+    // 接觸上下關係（縣市 × 縣市）：relS[a*N+b] > 0 表示 a 在 b 上方；relT 為最後一次接觸的模擬時間
+    const relS = new Float64Array(N * N), relT = new Float64Array(N * N);
+    let wmBuf = null;                // 重複使用的 WorldManifold
+    let relStats = { forced: 0, geo: 0, capped: 0, mixed: 0 };
 
     function reset(seed) {
       S = P.S;
@@ -394,6 +409,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
       groups = new Map(); groupOf = new Array(N).fill(-1); nextGid = 1;
       tweens = new Array(N).fill(null);
       events = []; acc = 0; simSteps = 0;
+      relS.fill(0); relT.fill(-1e9); relStats = { forced: 0, geo: 0, capped: 0, mixed: 0 };
       buildWalls();
       const rng = mulberry32(seed >>> 0);
       const order = [...Array(N).keys()];
@@ -581,6 +597,55 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
       return worst;
     }
 
+    // 測試用：縣市 m 所在群組對其他群組的最深穿透（px），以及 m 的重心是否落在別的群組的凸塊裡
+    function deepIn(m) {
+      const g = groups.get(groupOf[m]); if (!g) return null;
+      const mine = [];
+      for (let f = g.body.getFixtureList(); f; f = f.getNext()) if (f.getUserData() === m) {
+        const pts = f.getShape().m_vertices.map((v) => { const p = g.body.getWorldPoint(v); return [p.x / S, p.y / S]; });
+        mine.push(pts);
+      }
+      let depth = 0, other = -1, inside = false;
+      const c = worldPointOfMember(g, m);
+      for (const g2 of groups.values()) {
+        if (g2 === g) continue;
+        for (const B of bodyPolys(g2.body)) for (const A of mine) {
+          const d = -satGap(A, B.pts, 0, 0);
+          if (d > depth) { depth = d; other = g2.members[0]; }
+        }
+      }
+      // 小區塊的凸塊重心
+      for (const A of mine) {
+        const cx = A.reduce((a, p) => a + p[0], 0) / A.length, cy = A.reduce((a, p) => a + p[1], 0) / A.length;
+        for (const g2 of groups.values()) {
+          if (g2 === g) continue;
+          for (const B of bodyPolys(g2.body)) {
+            let pos = 0, neg = 0;
+            for (let i = 0, n = B.pts.length; i < n; i++) { const p = B.pts[i], q = B.pts[(i + 1) % n]; const cr = (q[0] - p[0]) * (cy - p[1]) - (q[1] - p[1]) * (cx - p[0]); if (cr > 0) pos++; else neg++; }
+            const ins = pos === 0 || neg === 0;
+            if (ins) { inside = true; }
+          }
+        }
+      }
+      return { depth, other, inside };
+    }
+
+    // 測試用：列出穿透超過 minPx 的群組對（含地板、牆）
+    function penPairs(minPx) {
+      const out = [], gl = [...groups.values()], all = gl.map((g) => bodyPolys(g.body));
+      const nm = (g) => g.members.map((m) => pieces[m].name).join("+");
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+        let w = 0;
+        for (const A of all[i]) for (const B of all[j]) {
+          if (A.b[2] < B.b[0] || A.b[0] > B.b[2] || A.b[3] < B.b[1] || A.b[1] > B.b[3]) continue;
+          w = Math.max(w, -satGap(A.pts, B.pts, 0, 0));
+        }
+        if (w > minPx) out.push([nm(gl[i]), nm(gl[j]), +w.toFixed(1)]);
+      }
+      for (let i = 0; i < all.length; i++) { let w = 0; for (const A of all[i]) w = Math.max(w, A.b[3] - floorY(), -A.b[0], A.b[2] - P.containerW); if (w > minPx) out.push([nm(gl[i]), "牆/地板", +w.toFixed(1)]); }
+      return out;
+    }
+
     function hull2(pts) {   // 凸包（Andrew monotone chain）
       pts = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
       const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -634,63 +699,170 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
       return { county: hp.county, x: hp.x, y: hp.y + best, a: hp.a, dy: best, hitBy };
     }
 
+    // ---------------------------------------------------------- 接觸上下關係
+    // 從一個接觸記錄縣市 a（fixture A）與 b（fixture B）的上下：法向量由 A 指向 B，y 向下，ny > 0 表示 A 在上
+    function recordRel(c, a, b, now) {
+      const man = c.getManifold(); if (!man || !man.pointCount) return;
+      wmBuf = c.getWorldManifold(wmBuf);
+      const ny = wmBuf.normal.y, k = a * N + b, k2 = b * N + a;
+      if (relT[k] !== now) { relS[k] = 0; relS[k2] = 0; relT[k] = now; relT[k2] = now; }   // 每一步重新累計（只反映最新的接觸）
+      if (Math.abs(ny) >= P.relMinNy) { const v = (ny > 0 ? 1 : -1) * man.pointCount; relS[k] += v; relS[k2] -= v; }
+    }
+    // 測試用：兩個區塊目前的實際上下（> 0：gx 在 gy 上方；以水平重疊的凸塊對投票）
+    function verticalOrder(gx, gy) {
+      let v = 0;
+      const PA = bodyPolys(gx.body), PB = bodyPolys(gy.body);
+      for (const A of PA) for (const B of PB) {
+        if (Math.min(A.b[2], B.b[2]) - Math.max(A.b[0], B.b[0]) <= 1) continue;
+        const ch = chordAtX(minkDiff(A.pts, B.pts), 0); if (!ch) continue;
+        if (ch[1] <= 0.5) v++; else if (ch[0] >= -0.5) v--;
+      }
+      return v;
+    }
+    // 兩個區塊的關係：> 0 gx 在 gy 上方；< 0 在下方；0 沒有有效資料（或只有並排接觸）；NaN 上下混雜
+    function groupRel(gx, gy, skip) {
+      if (!gx || !gy) return 0;
+      const now = simSteps * P.dt; let pos = 0, neg = 0;
+      for (const a of gx.members) {
+        if (skip && skip.has(a)) continue;
+        for (const b of gy.members) {
+          if (skip && skip.has(b)) continue;
+          const k = a * N + b; if (now - relT[k] > P.relTTL) continue;
+          const v = relS[k]; if (v > 0) pos += v; else neg -= v;
+        }
+      }
+      if (!pos && !neg) return 0;
+      if (Math.min(pos, neg) >= P.relMixed * Math.max(pos, neg)) return NaN;
+      return pos - neg;
+    }
+
     // ---------------------------------------------------------- 合併後的垂直上推
     // 新區塊 ng 只能「垂直上升」。要升多少，由它下方／重疊的障礙（含地板）決定；
     // 上升路徑上被掃到、或壓在它上面的區塊會被一起推高（含連鎖：壓在被推區塊上的也一起走）。
     // 作法：算出每一對區塊的垂直關係（誰在上、至少要拉開多少），再用最長路徑傳遞「被推高多少」。
-    function liftAfterMerge(ng) {
+    function liftAfterMerge(ng, skip) {
       const DELTA = 1, TOL = 1;
       const gl = [...groups.values()];
+      const gById = new Map(gl.map((g) => [g.id, g]));
       const polys = new Map(gl.map((g) => [g.id, bodyPolys(g.body)]));
       const xr = new Map(gl.map((g) => { let a = 1e9, b = -1e9; for (const p of polys.get(g.id)) { if (p.b[0] < a) a = p.b[0]; if (p.b[2] > b) b = p.b[2]; } return [g.id, [a, b]]; }));
-      const pairCache = new Map();
-      // 回傳 {lower, upper, req}：d[upper] ≥ d[lower] + req；沒有垂直重疊關係則 null
-      function pairReq(ia, ib) {
-        const key = ia < ib ? ia * 4096 + ib : ib * 4096 + ia;
-        if (pairCache.has(key)) return pairCache.get(key);
-        let out = null;
-        const xa = xr.get(ia), xb = xr.get(ib);
-        if (xa[1] - xb[0] > DELTA && xb[1] - xa[0] > DELTA) {
-          let bestUp = null;     // 以 ia 為下、ib 為上：ib 至少要比 ia 多升多少
-          let bestDn = null;     // 以 ib 為下、ia 為上
-          for (const A of polys.get(ia)) for (const B of polys.get(ib)) {
-            if (A.b[2] - B.b[0] <= DELTA || B.b[2] - A.b[0] <= DELTA) continue;
-            const D = minkDiff(A.pts, B.pts);
-            const c0 = chordAtX(D, 0); if (!c0) continue;
-            if (!chordAtX(D, DELTA) || !chordAtX(D, -DELTA)) continue;
-            const rUp = -c0[0] - TOL, rDn = c0[1] - TOL;
-            if (bestUp == null || rUp > bestUp) bestUp = rUp;
-            if (bestDn == null || rDn > bestDn) bestDn = rDn;
+      // 規劃（不動剛體）：useRel＝是否採用接觸上下關係。採用時若關係互相矛盾成環，改用純幾何重新規劃
+      const plan = (useRel) => {
+        const tally = { forced: 0, geo: 0, capped: 0, mixed: 0 };
+        const pairCache = new Map();
+        // 回傳 {lower, upper, req}：d[upper] ≥ d[lower] + req；沒有垂直重疊關係則 null
+        function pairReq(ia, ib) {
+          const key = ia < ib ? ia * 4096 + ib : ib * 4096 + ia;
+          if (pairCache.has(key)) return pairCache.get(key);
+          let out = null;
+          const xa = xr.get(ia), xb = xr.get(ib);
+          if (xa[1] - xb[0] > DELTA && xb[1] - xa[0] > DELTA) {
+            let bestUp = null;     // 以 ia 為下、ib 為上：ib 至少要比 ia 多升多少
+            let bestDn = null;     // 以 ib 為下、ia 為上
+            for (const A of polys.get(ia)) for (const B of polys.get(ib)) {
+              if (A.b[2] - B.b[0] <= DELTA || B.b[2] - A.b[0] <= DELTA) continue;
+              const D = minkDiff(A.pts, B.pts);
+              const c0 = chordAtX(D, 0); if (!c0) continue;
+              if (!chordAtX(D, DELTA) || !chordAtX(D, -DELTA)) continue;
+              const rUp = -c0[0] - TOL, rDn = c0[1] - TOL;
+              if (bestUp == null || rUp > bestUp) bestUp = rUp;
+              if (bestDn == null || rDn > bestDn) bestDn = rDn;
+            }
+            // 上下關係以「整個區塊」一起決定（每一對凸塊各自決定會造成互相矛盾、留下重疊）
+            //   1. 最近仍有效的接觸上下關係（雙方成員的接觸線彙總）
+            //   2. 沒有資料、上下混雜、或依接觸關係所需的上推比另一方向多出 relCapPx 以上 → 幾何：取所需位移較小的方向
+            if (bestUp != null) {
+              const mine = ia === ng.id || ib === ng.id;
+              let lowerIsA = bestUp <= bestDn, how = "geo";
+              if (useRel) {
+                const r = groupRel(gById.get(ia), gById.get(ib), skip);
+                if (Number.isNaN(r)) how = "mixed";
+                else if (r !== 0) {
+                  const wantLowerA = r < 0;                       // r < 0：ia 在 ib 下方
+                  const reqWant = wantLowerA ? bestUp : bestDn, reqOther = wantLowerA ? bestDn : bestUp;
+                  if (mine && reqWant > reqOther + P.relCapPx) how = "capped";
+                  else { lowerIsA = wantLowerA; how = "forced"; }
+                }
+              }
+              tally[how]++;
+              if (lowerIsA) out = { lower: ia, upper: ib, req: mine ? bestUp : Math.min(bestUp, 0), how };
+              else out = { lower: ib, upper: ia, req: mine ? bestDn : Math.min(bestDn, 0), how };
+            }
           }
-          // 上下關係以「整個區塊」一起決定（每一對凸塊各自決定會造成互相矛盾、留下重疊）：取要求較小的那個方向
-          if (bestUp != null) {
-            const mine = ia === ng.id || ib === ng.id;
-            if (bestUp <= bestDn) out = { lower: ia, upper: ib, req: mine ? bestUp : Math.min(bestUp, 0) };
-            else out = { lower: ib, upper: ia, req: mine ? bestDn : Math.min(bestDn, 0) };
+          pairCache.set(key, out);
+          return out;
+        }
+        const d = new Map(gl.map((g) => [g.id, 0]));
+        // 新區塊自身的下限：地板、以及它下方的障礙
+        const bb = groupAABB(ng);
+        let dM = Math.max(0, bb[3] - (floorY() - 0.5));
+        for (const g of gl) if (g !== ng) { const r = pairReq(ng.id, g.id); if (r && r.upper === ng.id) dM = Math.max(dM, r.req); }
+        d.set(ng.id, dM);
+        if (P.debugLift) {
+          const nmg = (g) => g.members.map((m) => pieces[m].name).join("+");
+          for (let x = 0; x < gl.length; x++) for (let y = x + 1; y < gl.length; y++) { const r = pairReq(gl[x].id, gl[y].id); if (r) console.log("   [lift]", nmg(gl[r.lower === gl[x].id ? x : y]), "→(下→上)", nmg(gl[r.lower === gl[x].id ? y : x]), "req", +r.req.toFixed(1)); }
+        }
+        // 最長路徑傳遞（glue：「口袋」關係的兩個區塊強制同升，見下方驗證）
+        const glue = new Map();   // gid → Set(gid)
+        let cyc = false;
+        const propagate = () => {
+          for (const g of gl) d.set(g.id, 0);
+          d.set(ng.id, dM);
+          const queue = [ng.id]; let pops = 0;
+          while (queue.length) {
+            const i = queue.shift();
+            if (++pops > 900) { cyc = true; break; }
+            for (const g of gl) {
+              if (g.id === i) continue;
+              const r = pairReq(i, g.id);
+              if (r && r.lower === i) {
+                const v = d.get(i) + r.req;
+                if (v > d.get(r.upper) + 1e-6) { d.set(r.upper, v); if (!queue.includes(r.upper)) queue.push(r.upper); }
+              }
+              if (glue.has(i) && glue.get(i).has(g.id) && d.get(i) > d.get(g.id) + 1e-6) { d.set(g.id, d.get(i)); if (!queue.includes(g.id)) queue.push(g.id); }
+            }
+          }
+        };
+        propagate();
+        const cycBase = cyc;
+        // 驗證：套用後仍互相穿透的一對（小塊卡在大塊的「口袋」裡：大塊上方與下方各有一部分，單純上推會讓下半部頂進小塊）
+        // → 把這一對綁在一起同升，重算；最多 6 輪
+        const unfixable = new Set();
+        for (let round = 0; round < 6; round++) {
+          const added = [];
+          for (let a = 0; a < gl.length; a++) for (let b = a + 1; b < gl.length; b++) {
+            const ia = gl[a].id, ib = gl[b].id, key = ia * 4096 + ib;
+            if (unfixable.has(key)) continue;
+            const xa = xr.get(ia), xb = xr.get(ib);
+            if (!(xa[1] - xb[0] > DELTA && xb[1] - xa[0] > DELTA)) continue;
+            const dy = -d.get(ia) + d.get(ib);   // A 相對 B 的垂直位移（y 向下，上升為負）
+            let w = 0;
+            for (const A of polys.get(ia)) for (const B of polys.get(ib)) {
+              if (A.b[2] <= B.b[0] || A.b[0] >= B.b[2]) continue;
+              w = Math.max(w, -satGap(A.pts, B.pts, 0, dy));
+            }
+            if (w > 3) {
+              if (!glue.has(ia)) glue.set(ia, new Set()); if (!glue.has(ib)) glue.set(ib, new Set());
+              glue.get(ia).add(ib); glue.get(ib).add(ia); added.push([ia, ib, key]);
+            }
+          }
+          if (!added.length) break;
+          cyc = false; propagate();
+          let maxd = 0; for (const v of d.values()) maxd = Math.max(maxd, v);
+          if (cyc || maxd > floorY()) {   // 綁在一起會讓高度無限推高（上下夾住、垂直上推無解）→ 撤回，維持原本的結果
+            for (const [ia, ib, key] of added) { glue.get(ia).delete(ib); glue.get(ib).delete(ia); unfixable.add(key); }
+            cyc = false; propagate();
           }
         }
-        pairCache.set(key, out);
-        return out;
-      }
-      const d = new Map(gl.map((g) => [g.id, 0]));
-      // 新區塊自身的下限：地板、以及它下方的障礙
-      const bb = groupAABB(ng);
-      let dM = Math.max(0, bb[3] - (floorY() - 0.5));
-      for (const g of gl) if (g !== ng) { const r = pairReq(ng.id, g.id); if (r && r.upper === ng.id) dM = Math.max(dM, r.req); }
-      d.set(ng.id, dM);
-      // 最長路徑傳遞
-      const queue = [ng.id]; let pops = 0, cyc = false;
-      while (queue.length) {
-        const i = queue.shift();
-        if (++pops > 600) { cyc = true; break; }
-        for (const g of gl) {
-          if (g.id === i) continue;
-          const r = pairReq(i, g.id);
-          if (!r || r.lower !== i) continue;
-          const v = d.get(i) + r.req;
-          if (v > d.get(r.upper) + 1e-6) { d.set(r.upper, v); if (!queue.includes(r.upper)) queue.push(r.upper); }
-        }
-      }
+        if (cyc) { for (const g of gl) d.set(g.id, 0); d.set(ng.id, dM); }   // 關係矛盾（循環）：只推新區塊，其餘交給物理引擎
+        if (P.debugLiftWarn && (dM > 600 || cyc)) console.error("[lift警告] cycBase", cycBase, "dM", dM.toFixed(0), "cyc", cyc, "glue", [...glue.entries()].map(([k, v]) => k + ":" + [...v]).join(" "), "unfixable", unfixable.size, "max d", Math.max(...d.values()).toFixed(0));
+        return { d, cyc, dM, tally };
+      };
+      let R = plan(!!P.liftByContact), retried = false;
+      if (R.cyc && P.liftByContact) { R = plan(false); retried = true; }
+      const { d, cyc, tally } = R;
+      for (const k in tally) relStats[k] += tally[k];
+      if (retried) relStats.retried = (relStats.retried || 0) + 1;
       // 套用
       const carried = [];
       const fromPoses = new Map();
@@ -704,7 +876,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
         if (dy > 2) g.landed = false;
       }
       for (const [m, fp] of fromPoses) tweens[m] = { x: fp.x, y: fp.y, a: fp.a, t: 0 };
-      return { lift: dM, carried, cycle: cyc };
+      return { lift: d.get(ng.id), carried, cycle: cyc, maxd: Math.max(...d.values()), rel: tally, retried };
     }
 
     // ---------------------------------------------------------- 合併
@@ -766,10 +938,18 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
       if (bb[0] < 3) dx = 3 - bb[0]; else if (bb[2] > P.containerW - 3) dx = P.containerW - 3 - bb[2];
       if (dx) { const p = ng.body.getPosition(); ng.body.setTransform(Vec2(p.x + dx * S, p.y), ng.body.getAngle()); }
 
+      // 被轉了很大角度的舊區塊：它成員的舊接觸關係不再代表新的上下，不採用
+      const skip = new Set(), fin = ng.body.getAngle(), lim = P.relMaxRot * Math.PI / 180;
+      if (Math.abs(wrapPi(fin - thA)) > lim) for (const m of gA.members) skip.add(m);
+      if (Math.abs(wrapPi(fin - thB)) > lim) for (const m of gB.members) skip.add(m);
+      // 測試用：合併前「新區塊成員與其他區塊」的有效接觸上下關係，上推後檢查有沒有上下對調
+      const pre = P.debugSwap ? [...groups.values()].filter((g) => g !== gA && g !== gB && g !== ng).map((g) => [g, groupRel(ng, g, null)]).filter(([, r]) => r && !Number.isNaN(r)) : null;
       // 移除舊剛體後做垂直上推
       world.destroyBody(bA); world.destroyBody(bB);
       groups.delete(gA.id); groups.delete(gB.id);
-      const lift = liftAfterMerge(ng);
+      const lift = liftAfterMerge(ng, skip);
+      let swaps;
+      if (pre) { swaps = 0; for (const [g, r] of pre) if (groups.has(g.id) && Math.sign(r) * verticalOrder(ng, g) < 0) swaps++; }
 
       // 速度：質心動量與角動量守恆
       const Inew = ng.body.getInertia() - ng.body.getMass() * Vec2.dot(ng.body.getLocalCenter(), ng.body.getLocalCenter());
@@ -783,7 +963,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
       st.merges++;
       if (penghuIdx >= 0 && (cA === penghuIdx || cB === penghuIdx)) st.links.push([penghuIdx, cA === penghuIdx ? cB : cA]);
       const cc = ng.body.getWorldCenter();
-      events.push({ type: "merge", a: cA, b: cB, size: members.length, gid: ng.id, pos: [cc.x / S, cc.y / S], lift: lift.lift, carried: lift.carried.length, cycle: lift.cycle, pen: P.debugPen ? maxPenetration() : undefined });
+      events.push({ type: "merge", a: cA, b: cB, size: members.length, gid: ng.id, pos: [cc.x / S, cc.y / S], lift: lift.lift, maxd: lift.maxd, carried: lift.carried.length, cycle: lift.cycle, rel: lift.rel, retried: lift.retried, skipped: skip.size, swaps, pen: P.debugPen ? maxPenetration() : undefined, penPairs: P.debugPen ? penPairs(3) : undefined });
       if (members.length === N && st.status === "playing") {
         st.status = "won"; st.wonAt = st.time;
         events.push({ type: "win", time: st.time });
@@ -792,7 +972,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     }
 
     function scanContacts() {
-      const pairs = [];
+      const pairs = [], now = simSteps * P.dt;
       for (const g of groups.values()) g._touch = false;
       for (let c = world.getContactList(); c; c = c.getNext()) {
         if (!c.isTouching()) continue;
@@ -801,7 +981,9 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
         const ga = groups.get(fa.getBody().getUserData()), gb = groups.get(fb.getBody().getUserData());
         if (ga) ga.landed = true;
         if (gb) gb.landed = true;
-        if (a >= 0 && b >= 0 && adj[a][b] && ga && gb && ga !== gb) {
+        if (a >= 0 && b >= 0 && ga && gb && ga !== gb) recordRel(c, a, b, now);
+        const looseOk = P.looseAdj && a >= 0 && b >= 0 && ga && gb && ga !== gb && ga.members.some((x) => gb.members.some((y) => adj[x][y]));   // 實驗：區塊內任一成員與對方任一成員鄰接就算（預設關閉）
+        if (a >= 0 && b >= 0 && (adj[a][b] || looseOk) && ga && gb && ga !== gb) {
           // A 案：澎湖已經連上某個區塊之後，不再因為澎湖的接觸而合併（B 案照常）
           if (P.penghuLink !== "B" && penghuIdx >= 0 && (a === penghuIdx || b === penghuIdx)) {
             const gp = a === penghuIdx ? ga : gb;
@@ -979,8 +1161,10 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     const api = {
       N, pieces, adj, idxByName, P, penghuIdx,
       newGame, restore, serialize, update, stepOnce, drop, shake, canShake,
-      setHeldX, heldPose, nextPreview, unplaced, dropPreview, previewVisible, fallTime, hold, retrieve, canHold, canRetrieve, nextShakeDir, maxPenetration, countyPose, groupsInfo, drainEvents, setParams,
+      setHeldX, heldPose, nextPreview, unplaced, dropPreview, previewVisible, fallTime, hold, retrieve, canHold, canRetrieve, nextShakeDir, maxPenetration, penPairs, deepIn, countyPose, groupsInfo, drainEvents, setParams,
       groupAABB: (gid) => groupAABB(groups.get(gid)),
+      relation: (a, b) => ({ s: relS[a * N + b], age: simSteps * P.dt - relT[a * N + b] }),
+      get relStats() { return relStats; },
       debugMerge: (a, b) => { const ga = groups.get(groupOf[a]), gb = groups.get(groupOf[b]); if (ga && gb && ga !== gb) { mergeGroups(ga, gb, a, b); return true; } return false; },
       floorY, deadlineY,
       get state() { return st; },
@@ -999,7 +1183,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const SAVE_KEY = "tw-puzzle-save-v6", PARAM_KEY = "tw-puzzle-params-v6";
+  const SAVE_KEY = "tw-puzzle-save-v7", PARAM_KEY = "tw-puzzle-params-v7";
   const store = {
     get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 無法儲存時照常遊玩 */ } },
@@ -1022,6 +1206,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     ["shakeRegen", "體力回復 /秒", 1, 60, 1],
     ["shakeAlt", "拍打模式 (0 自選左右 / 1 左右交替)", 0, 1, 1],
     ["edgeW", "外框線寬（外側）px", 1, 5, 0.1],
+    ["relCapPx", "合併上推：接觸上下優先的容許差 px", 0, 1000, 10],
   ];
   const DEFAULTS = window.TPCore.DEFAULTS;
   let userParams = Object.assign({}, store.get(PARAM_KEY) || {});
@@ -1308,7 +1493,7 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
     if (document.activeElement !== $("selMap")) $("selMap").value = P.penghu ? "2" : "1";
     if (document.activeElement !== $("selLink")) $("selLink").value = P.penghuLink === "B" ? "B" : "A";
     $("selLink").disabled = !P.penghu;
-    document.querySelector(".tag").textContent = P.penghu ? "物理原型 v6 · 本島 19 塊 + 澎湖" : "物理原型 v6 · 本島 19 塊";
+    document.querySelector(".tag").textContent = P.penghu ? "物理原型 v7 · 本島 19 塊 + 澎湖" : "物理原型 v7 · 本島 19 塊";
   }
   $("chkHint").checked = !!store.get("tw-puzzle-hint");
   $("chkHint").addEventListener("change", (e) => store.set("tw-puzzle-hint", e.target.checked));
