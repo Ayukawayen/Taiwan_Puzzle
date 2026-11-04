@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v11</title>
+<title>台灣拼圖合成 v12</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -297,13 +297,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             <h4 id="h-deadline">淘汰線</h4>
             <ul>
               <li>落地的拼圖只要有一點高過紅色淘汰線，就開始倒數。</li>
-              <li>倒數是<b>累積</b>的：回到線下後會慢慢回復，不會立刻歸零。累積時間超過，這局就結束。</li>
+              <li>倒數是<b>累積</b>的：回到線下後會慢慢回復，不會立刻歸零。累積滿 <b data-p="graceSec">6</b> 秒，這局就結束。</li>
               <li>合併時區塊會滑到正確位置，有時會把其他區塊往上推，留意高度。</li>
             </ul>
             <h4>幫手</h4>
             <ul>
               <li><b>保留區</b>：先把手上這塊存起來，換下一塊上手，之後再取出。只有 1 格，最後一塊不能保留。</li>
-              <li><b>拍打機台</b>：讓所有區塊一起往左上或往右上彈一下。每次拍打會耗費體力，體力會隨時間回復。</li>
+              <li><b>拍打機台</b>：讓所有區塊一起往左或往右彈一下，幫卡住的區塊互相碰到。每拍一次耗 <span data-p="shakeCost">20</span> 體力，體力低於 <span data-p="shakeMin">20</span> 不能拍，每秒回復 <span data-p="shakeRegen">25</span>。</li>
             </ul>
             <h4 id="h-penghu">澎湖（選用地圖）</h4>
             <ul>
@@ -434,8 +434,9 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  * 輸贏
  *   全部縣市合成一個區塊＝勝。已落地（landed）區塊的最高點高過淘汰線時累積 grace，未超線時以兩倍速回復；累積達 graceSec＝敗。
  *
- * 確定性重放（V8）
+ * 確定性重放（V8；記錄格式 v2 自 v12 起）
  *   canonical 開啟時，每個行動（放下、拍打）被接受前先以存檔快照重建世界，亂數也由快照內容決定，行動記錄可逐位元重放。
+ *   保留／取出不影響物理與亂數，記成不附快照的輕量項目；重放時在對應步數套用即可重現。
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -543,27 +544,44 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     // 事件：給畫面（drainEvents）＋寫入行動記錄（兩個行動之間的事件）
     function emit(e) { events.push(e); if (cur) cur.tail.events.push(Object.assign({ d: sinceAct }, e)); }
 
-    // ---------------------------------------------------------- 行動記錄（偵錯用，V8）
-    // 以玩家操作（放下、拍打）為單位。每個行動記：行動前一瞬間的狀態快照、參數、與前一個行動相隔的模擬步數、
-    // 這段期間的保留／取出（含步數位置）與事件。行動被接受時，遊戲先「以快照重建世界」（canonicalize），
-    // 所以重放器 restore(快照) → 套用行動 → 跑同樣步數，結果會與下一個快照逐位元相同。
+    // ---------------------------------------------------------- 行動記錄（偵錯用；格式 v2，v12 起）
+    // 每段（segment）的 actions 依發生順序列出所有玩家操作，各類型資料格式不同：
+    //   drop     { n, type, d, time, county, x, a, events, snap }   放下：附行動前一瞬間的快照
+    //   shake    { n, type, d, time, dir, events, snap }            拍打：附快照
+    //   hold     { n, type, d, time, county, events }               保留：county＝放進保留區的縣市；不附快照
+    //   retrieve { n, type, d, time, county, back, events }         取出：county＝取到手上的縣市，back＝退回序列的縣市（沒有則 null）
+    // d＝與前一筆（任何類型）相隔的模擬步數；events＝前一筆之後到這一筆之前發生的事件。
+    // 放下／拍打被接受時，遊戲先「以快照重建世界」（canonicalize），所以重放器 restore(快照) → 套用行動 → 依序跑步數並套用
+    // 中間的保留／取出 → 到下一個有快照的行動，結果會與它的快照逐位元相同。保留／取出不碰物理與亂數，所以不需要快照。
     let rec = null, cur = null, sinceAct = 0;
+    const LOG_VERSION = 2;
     function recHeader() {
       const pp = {}; for (const k of Object.keys(P)) { const v = P[k]; if (typeof v !== "function") pp[k] = v; }
-      return { format: "tw-puzzle-log", logVersion: 1, saveVersion: SAVE_VERSION, created: Date.now(), params: pp, pieces: N, penghu: !!P.penghu };
+      return { format: "tw-puzzle-log", logVersion: LOG_VERSION, saveVersion: SAVE_VERSION, created: Date.now(), params: pp, pieces: N, penghu: !!P.penghu };
     }
+    // 還原存檔時，同一個種子、同一記錄格式的舊記錄接著寫（新增一段）；格式不同就另開新記錄
     function recStart(reason, prev, snap0) {
       if (!P.record) { rec = null; cur = null; return; }
-      rec = prev && prev.format === "tw-puzzle-log" && prev.seed === st.seed && prev.segments ? prev : Object.assign(recHeader(), { seed: st.seed, segments: [] });
-      cur = { reason, at: Date.now(), time: st.time, snap0: JSON.parse(JSON.stringify(snap0 || serialize())), actions: [], tail: { holdOps: [], events: [] } };
+      rec = prev && prev.format === "tw-puzzle-log" && prev.logVersion === LOG_VERSION && prev.seed === st.seed && prev.segments ? prev : Object.assign(recHeader(), { seed: st.seed, segments: [] });
+      cur = { reason, at: Date.now(), time: st.time, snap0: JSON.parse(JSON.stringify(snap0 || serialize())), actions: [], nextN: 0, tail: { events: [] } };
       rec.segments.push(cur); sinceAct = 0;
     }
-    function recAction(type, prm, snap) {
+    // 新增一筆記錄；snap 為 null 表示輕量項目（保留／取出）
+    function pushEntry(type, prm, snap) {
       if (!cur) return;
-      cur.actions.push(Object.assign({ n: cur.actions.length, type, d: sinceAct, time: st.time }, prm, { holdOps: cur.tail.holdOps, events: cur.tail.events, snap }));
-      cur.tail = { holdOps: [], events: [] }; sinceAct = 0;
-      if (cur.actions.length > P.recMaxActions) cur.actions.splice(0, cur.actions.length - P.recMaxActions).length && (cur.trimmed = (cur.trimmed || 0) + 1);
+      const e = Object.assign({ n: cur.nextN++, type, d: sinceAct, time: st.time }, prm, { events: cur.tail.events });
+      if (snap) e.snap = snap;
+      cur.actions.push(e);
+      cur.tail = { events: [] }; sinceAct = 0;
+      // 超過上限就截掉前段；截斷後的第一筆必須有快照（重放起點），所以連同它前面的輕量項目一起截掉
+      if (cur.actions.length > P.recMaxActions) {
+        let k = cur.actions.length - P.recMaxActions;
+        while (k < cur.actions.length && !cur.actions[k].snap) k++;
+        if (k < cur.actions.length) { cur.actions.splice(0, k); cur.trimmed = (cur.trimmed || 0) + 1; }
+      }
     }
+    const recAction = (type, prm, snap) => pushEntry(type, prm, snap);
+    const recLight = (type, prm) => pushEntry(type, prm, null);
     // 行動被接受前呼叫：記錄快照並以它重建世界（顯示用的補間、未讀事件、步進餘量保留）
     function beginAction(type, prm) {
       const snap = JSON.parse(JSON.stringify(serialize()));
@@ -580,8 +598,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       if (!rec) return null;
       const out = JSON.parse(JSON.stringify(rec));
       const last = out.segments[out.segments.length - 1];
-      last.end = { d: sinceAct, holdOps: cur ? cur.tail.holdOps : [], events: cur ? cur.tail.events : [], time: st.time, snap: JSON.parse(JSON.stringify(serialize())) };
-      for (const sg of out.segments) delete sg.tail;
+      last.end = { d: sinceAct, events: cur ? cur.tail.events : [], time: st.time, snap: JSON.parse(JSON.stringify(serialize())) };
+      for (const sg of out.segments) { delete sg.tail; delete sg.nextN; }
       out.exported = Date.now();
       return out;
     }
@@ -728,16 +746,17 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     function hold() {
       if (!canHold()) return false;
       st.slot = st.held; st.held = st.queue.shift(); st.heldAngle = 0;
-      if (cur) cur.tail.holdOps.push({ d: sinceAct, op: "hold", county: st.slot });
+      recLight("hold", { county: st.slot });
       emit({ type: "hold", county: st.slot });
       return true;
     }
     function canRetrieve() { return st.status === "playing" && st.slot != null; }
     function retrieve() {
       if (!canRetrieve()) return false;
-      if (st.held != null) st.queue.unshift(st.held);   // 目前這塊退回序列，成為下一塊；手上沒有拼圖時直接取出
+      const back = st.held;
+      if (back != null) st.queue.unshift(back);   // 目前這塊退回序列，成為下一塊；手上沒有拼圖時直接取出
       st.held = st.slot; st.slot = null; st.heldAngle = 0;
-      if (cur) cur.tail.holdOps.push({ d: sinceAct, op: "retrieve", county: st.held });
+      recLight("retrieve", { county: st.held, back });
       emit({ type: "retrieve", county: st.held });
       return true;
     }
@@ -1356,8 +1375,9 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   }
 
   // ------------------------------------------------------------ 偵錯重放（唯讀）
-  // 讀行動記錄，重放「行動 t 的起點 → 套用行動 t → 跑到行動 t+1 的起點」，與記錄的 t+1 快照比對。只記錄差異，不診斷、不修改。
-  // 轉移 j：j = 0 是「段落開頭 → 第 0 個行動」；j ≥ 1 是「第 j−1 個行動 → 第 j 個行動」；最後一個轉移的終點是匯出當下（end）。
+  // 讀行動記錄，在相鄰兩個「比對點」之間重放，並與後一個比對點的快照比對。只記錄差異，不診斷、不修改。
+  // 比對點：段落開頭（snap0；前段被截斷時改為第一個有快照的行動）、每個放下／拍打、匯出當下（end）。
+  // 轉移 j：還原比對點 j 的快照 → 套用該行動（段落開頭則無）→ 依序跑步數並套用中間的保留／取出 → 跑到比對點 j+1，比對其快照。
   const IGNORE = new Set(["heldX", "heldAngle"]);     // 游標位置與手上拼圖的自轉角度隨畫面時間變化，不是模擬結果
   function compareSnap(got, want) {
     const diffs = [];
@@ -1376,38 +1396,78 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     }
     return { diffs, maxPos };
   }
+  // 舊格式（v1：保留／取出以 holdOps 掛在下一個放下／拍打底下，d 為距上一個行動的步數）轉成 v2；v2 原樣複製
+  function normalizeLog(log) {
+    const out = JSON.parse(JSON.stringify(log));
+    if ((out.logVersion || 1) >= 2) return out;
+    for (const sg of out.segments || []) {
+      const acts = []; let n = 0;
+      const conv = (a) => {
+        let last = 0;
+        for (const o of a.holdOps || []) { acts.push({ n: n++, type: o.op, d: o.d - last, time: null, county: o.county, events: [] }); last = o.d; }
+        a.d -= last; delete a.holdOps; return a;
+      };
+      for (const a of sg.actions || []) { conv(a); a.n = n++; acts.push(a); }
+      sg.actions = acts;
+      if (sg.end) { const keep = acts.length; conv(sg.end); sg.endLights = acts.length - keep; }
+    }
+    out.logVersion = 2; out.convertedFrom = 1;
+    return out;
+  }
+  const hasSnap = (a) => a.type === "drop" || a.type === "shake";
   function makeReplayer(opts) {
-    const log = opts.log;
-    if (!log || log.format !== "tw-puzzle-log") throw new Error("不是行動記錄檔");
+    if (!opts.log || opts.log.format !== "tw-puzzle-log") throw new Error("不是行動記錄檔");
+    const log = normalizeLog(opts.log);
     const core = create({ planck: opts.planck, shapes: opts.shapes, params: Object.assign({}, log.params, { record: false, canonical: false }) });
     const clone = (o) => JSON.parse(JSON.stringify(o));
-    const count = (si) => { const sg = log.segments[si]; return sg ? sg.actions.length + (sg.end ? 1 : 0) : 0; };
+    // 每段的比對點：{ i：在 actions 中的索引（−1＝段落開頭），end：是否為匯出當下 }
+    const pts = log.segments.map((sg) => {
+      const out = [], snaps = [];
+      sg.actions.forEach((a, i) => { if (hasSnap(a)) snaps.push(i); });
+      if (sg.trimmed) { if (!snaps.length) return []; out.push({ i: snaps.shift() }); } else out.push({ i: -1 });
+      for (const i of snaps) out.push({ i });
+      if (sg.end) out.push({ i: sg.actions.length, end: true });
+      return out;
+    });
+    const count = (si) => (pts[si] ? Math.max(0, pts[si].length - 1) : 0);
     function applyAct(a) {
       if (a.type === "drop") { core.state.heldAngle = a.a; core.setHeldX(a.x); return core.drop(); }
       if (a.type === "shake") return core.shake(a.dir);
       return false;
     }
+    // 保留／取出：套用後檢查結果與記錄的縣市相符
+    function applyLight(a) {
+      if (a.type === "hold") return core.hold() && core.state.slot === a.county;
+      if (a.type === "retrieve") {
+        const had = core.state.held;
+        return core.retrieve() && core.state.held === a.county && (a.back === undefined || had === a.back);
+      }
+      return false;
+    }
     function run(si, j) {
-      const sg = log.segments[si]; if (!sg) return null;
-      const acts = sg.actions, from = j === 0 ? null : acts[j - 1], to = j < acts.length ? acts[j] : sg.end;
-      if (!to) return null;
-      const res = { seg: si, j, from: from ? `#${from.n} ${from.type}` : "段落開頭", to: j < acts.length ? `#${to.n} ${to.type}` : "匯出當下", steps: to.d, sec: +(to.d * core.P.dt).toFixed(3) };
+      const sg = log.segments[si], P0 = pts[si] && pts[si][j], P1 = pts[si] && pts[si][j + 1];
+      if (!sg || !P0 || !P1) return null;
+      const acts = sg.actions, from = P0.i < 0 ? null : acts[P0.i], to = P1.end ? sg.end : acts[P1.i];
+      const mids = acts.slice(P0.i + 1, P1.i);   // 兩個比對點之間的保留／取出
+      const steps = mids.reduce((t, a) => t + a.d, 0) + to.d;
+      const res = { seg: si, j, from: from ? `#${from.n} ${from.type}` : "段落開頭", to: P1.end ? "匯出當下" : `#${to.n} ${to.type}`, steps, sec: +(steps * core.P.dt).toFixed(3), lights: mids.length };
       if (!core.restoreState(clone(from ? from.snap : sg.snap0))) return Object.assign(res, { same: false, error: "起點快照無法還原" });
       res.applied = from ? applyAct(from) : true;
-      const ops = to.holdOps || []; let oi = 0;
-      for (let k = 0; k <= to.d; k++) {
-        while (oi < ops.length && ops[oi].d === k) { const o = ops[oi++]; if (o.op === "hold") core.hold(); else if (o.op === "retrieve") core.retrieve(); }
-        if (k < to.d) core.stepOnce();
+      let lightOk = true;
+      for (const a of mids) {
+        for (let k = 0; k < a.d; k++) core.stepOnce();
+        if (!applyLight(a)) { lightOk = false; res.lightFail = `#${a.n} ${a.type}`; }
       }
+      for (let k = 0; k < to.d; k++) core.stepOnce();
       core.drainEvents();
       const c = compareSnap(clone(core.serialize()), to.snap);
-      return Object.assign(res, { same: c.diffs.length === 0 && res.applied !== false, nDiffs: c.diffs.length, maxPos: +c.maxPos.toFixed(4), diffs: c.diffs.slice(0, 20) });
+      return Object.assign(res, { same: c.diffs.length === 0 && res.applied !== false && lightOk, nDiffs: c.diffs.length, maxPos: +c.maxPos.toFixed(4), diffs: c.diffs.slice(0, 20) });
     }
     function runAll(si) { const out = []; for (let j = 0; j < count(si); j++) out.push(run(si, j)); return out; }
     return { log, core, count, run, runAll, segments: log.segments.length };
   }
 
-  return { create, DEFAULTS, mulberry32, makeReplayer, compareSnap };
+  return { create, DEFAULTS, mulberry32, makeReplayer, compareSnap, normalizeLog };
 });
 
 </script>
@@ -1416,7 +1476,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  * v10：移除「全部放下且靜止後提示拍打」；鄰接提示改用與 core.js 合併判定相同的條件（含澎湖規則 A）。
  * v11：說明分層——說明視窗（規則／操作／畫面，首次開啟自動顯示，可隨時叫出）、標題旁的說明鈕、畫布上方提示條、
  *      一次性提示（看過就不再出現，可在設定重設）；「結束」改為「選單」並暫停遊戲；新局參數（地圖、澎湖規則、拍打模式）
- *      移到選單的「新局設定」，代入目前的值供快速開局；鄰接提示開關移到設定。 */
+ *      移到選單的「新局設定」，代入目前的值供快速開局；鄰接提示開關移到設定。
+ * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。 */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1869,6 +1930,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   function summary(log) {
     log = log || currentLog();
     if (!log) { console.warn("[偵錯] 沒有行動記錄"); return; }
+    log = window.TPCore.normalizeLog(log);   // v1 記錄檔先轉成 v2
     const names = shapes.pieces.filter((p) => log.penghu || p.name !== PENGHU).map((p) => p.name);
     const nm = (i) => (i == null ? "—" : names[i] || "#" + i);
     const D = window.TPCore.DEFAULTS;
@@ -1883,19 +1945,23 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const groupsText = (snap) => snap.groups.slice().sort((a, b) => b.members.length - a.members.length).map((g) => g.members.map(nm).join("+")).join(" ｜ ");
     console.group(`%c台灣拼圖合成｜行動記錄摘要`, "font-weight:bold;font-size:13px");
     console.log(`版本 ${log.build || "?"}｜種子 ${log.seed}｜${log.penghu ? `含澎湖 20 塊（澎湖規則 ${log.params.penghuLink}）` : "本島 19 塊"}｜段落 ${log.segments.length}`);
-    console.log(`與預設不同的參數：${changed.join("、") || "無"}`);
+    console.log(`與預設不同的參數：${changed.join("、") || "無"}${log.convertedFrom ? "｜由 v1 記錄格式轉換" : ""}`);
+    const ACT = { drop: "放下", hold: "保留", retrieve: "取出" };
     log.segments.forEach((sg, si) => {
-      const n = sg.actions.length;
-      console.groupCollapsed(`段落 ${si + 1}：${sg.reason === "new" ? "新局" : "由存檔還原"}，遊戲時間 ${fmtT(sg.time)} 起，${n} 個行動${sg.trimmed ? "（前段已截斷）" : ""}`);
+      const n = sg.actions.length, nLight = sg.actions.filter((a) => a.type === "hold" || a.type === "retrieve").length;
+      console.groupCollapsed(`段落 ${si + 1}：${sg.reason === "new" ? "新局" : "由存檔還原"}，遊戲時間 ${fmtT(sg.time)} 起，${n} 筆（放下／拍打 ${n - nLight}、保留／取出 ${nLight}）${sg.trimmed ? "（前段已截斷）" : ""}`);
       const first = n ? sg.actions[0] : sg.end;
-      if (first && evText(first.events)) console.log(`段落開頭到第一個行動之間：${evText(first.events)}`);
+      if (first && evText(first.events)) console.log(`段落開頭到第一筆之間：${evText(first.events)}`);
+      // 某筆之後的下一個快照（下一個放下／拍打，或匯出當下）：用來顯示「之後的區塊數」
+      const nextSnap = (k) => { for (let q = k + 1; q < n; q++) if (sg.actions[q].snap) return sg.actions[q].snap; return sg.end ? sg.end.snap : null; };
       const rows = sg.actions.map((a, k) => {
-        const nx = k + 1 < n ? sg.actions[k + 1] : sg.end;
+        const nx = k + 1 < n ? sg.actions[k + 1] : sg.end, ns = nextSnap(k);
+        const county = a.type === "shake" ? "" : a.type === "retrieve" && a.back != null ? `${nm(a.county)}（${nm(a.back)} 退回序列）` : nm(a.county);
         return {
-          "#": a.n, "時間": fmtT(a.time), "動作": a.type === "drop" ? "放下" : a.dir < 0 ? "拍打 ◀" : "拍打 ▶",
-          "縣市": a.type === "drop" ? nm(a.county) : "", "x": a.type === "drop" ? Math.round(a.x) : "", "角度°": a.type === "drop" ? Math.round((a.a * 180 / Math.PI + 360) % 360) : "",
-          "距上一動作(秒)": +(a.d * log.params.dt).toFixed(2), "之前的保留／取出": a.holdOps.map((o) => (o.op === "hold" ? "保留 " : "取出 ") + nm(o.county)).join("、"),
-          "體力": Math.round(a.snap.stamina), "之後的事件": nx ? evText(nx.events) : "（記錄結束）", "之後的區塊數": nx ? nx.snap.groups.length : "",
+          "#": a.n, "時間": a.time == null ? "—" : fmtT(a.time), "動作": a.type === "shake" ? (a.dir < 0 ? "拍打 ◀" : "拍打 ▶") : ACT[a.type] || a.type,
+          "縣市": county, "x": a.type === "drop" ? Math.round(a.x) : "", "角度°": a.type === "drop" ? Math.round((a.a * 180 / Math.PI + 360) % 360) : "",
+          "距上一筆(秒)": +(a.d * log.params.dt).toFixed(2),
+          "體力": a.snap ? Math.round(a.snap.stamina) : "", "之後的事件": nx ? evText(nx.events) : "（記錄結束）", "之後的區塊數": ns ? ns.groups.length : "",
         };
       });
       if (rows.length) console.table(rows);
@@ -1910,11 +1976,11 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   const dbgOut = (t, append) => { const el = $("dbgOut"); el.textContent = append ? el.textContent + "\n" + t : t; el.scrollTop = el.scrollHeight; };
   function rpLine(r) {
     if (!r) return "（沒有下一步）";
-    const head = `段${r.seg + 1} 轉移${r.j}：${r.from} → ${r.to}（${r.steps} 步／${r.sec}s）`;
+    const head = `段${r.seg + 1} 轉移${r.j}：${r.from} → ${r.to}（${r.steps} 步／${r.sec}s${r.lights ? `，含保留／取出 ${r.lights} 筆` : ""}）`;
     if (r.error) return head + "  ✗ " + r.error;
     if (r.same) return head + "  ✓ 相同";
     const d0 = r.diffs[0];
-    return head + `  ✗ ${r.nDiffs} 處不同${r.applied === false ? "（行動未被接受）" : ""}，最大位置差 ${r.maxPos}px；首個：${d0 ? `${d0.path} 得 ${d0.got} 記錄 ${d0.want}` : ""}`;
+    return head + `  ✗ ${r.nDiffs} 處不同${r.applied === false ? "（行動未被接受）" : ""}${r.lightFail ? `（${r.lightFail} 無法照記錄套用）` : ""}，最大位置差 ${r.maxPos}px；首個：${d0 ? `${d0.path} 得 ${d0.got} 記錄 ${d0.want}` : ""}`;
   }
   function loadReplay(log, label) {
     try { rp = window.TPCore.makeReplayer({ planck: window.planck, shapes, log }); } catch (e) { rp = null; dbgOut("無法載入：" + e.message); return; }
@@ -1941,7 +2007,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     dbgOut(`全部 ${all.length} 個轉移：相同 ${all.length - bad.length}，不同 ${bad.length}`);
     for (const r of bad.slice(0, 30)) dbgOut(rpLine(r), true);
     console.groupCollapsed(`[重放] 全部 ${all.length} 個轉移，不同 ${bad.length}`);
-    console.table(all.map((r) => ({ 段: r.seg + 1, 轉移: r.j, 起: r.from, 迄: r.to, 步數: r.steps, 結果: r.same ? "相同" : `不同 ${r.nDiffs}`, 最大位置差: r.maxPos, 首個差異: r.diffs && r.diffs[0] ? r.diffs[0].path : "" })));
+    console.table(all.map((r) => ({ 段: r.seg + 1, 轉移: r.j, 起: r.from, 迄: r.to, 步數: r.steps, 保留取出: r.lights || "", 結果: r.same ? "相同" : `不同 ${r.nDiffs}`, 最大位置差: r.maxPos, 首個差異: r.diffs && r.diffs[0] ? r.diffs[0].path : "" })));
     console.groupEnd();
     return all;
   }
