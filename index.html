@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v12</title>
+<title>台灣拼圖合成 v13</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -426,10 +426,12 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  *   放不進容器時繞質心轉到最近可放的角度並水平推回容器；與其他區塊重疊時做垂直上推（liftAfterMerge），因此質心之後可能移動。
  *   畫面用補間（tween）從舊姿態滑到新姿態，物理已在新姿態上。
  *
- * 垂直上推（V9）
+ * 垂直上推（V9；v13 加入穿越與超線代價）
  *   所有區塊都只能垂直上升，求最小上推量（自由區間＋差分約束，細節見 liftAfterMerge）。
  *   選區間時優先維持合併前的上下順序（verticalOrder、preOrder；違反者加 liftOrderBias），
  *   取代 V6～V8 的「口袋綁定」與 V7～V8 的接觸上下關係。
+ *   v13：另以凸塊層級的上下關係（localOrder）檢查「穿越」——選中的位置若讓任一對凸塊的上下對調（例如小塊被移到薄牆另一側），
+ *   加 liftCrossBias；上推讓區塊（更）超過淘汰線時，加 liftDeadlineBias＋超出高度。
  *
  * 輸贏
  *   全部縣市合成一個區塊＝勝。已落地（landed）區塊的最高點高過淘汰線時累積 grace，未超線時以兩倍速回復；累積達 graceSec＝敗。
@@ -467,10 +469,10 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     edgeW: 2,                // 顯示用：外框線寬（螢幕 px 的下限對應見 ui.js）
     shakeAlt: false,         // 拍打模式：false＝自選左右；true＝左右交替（單數次向左、雙數次向右，不可選）
     shakeMax: 100,
-    shakeCost: 10,
-    shakeMin: 10,            // 體力低於此值不能拍
-    shakeRegen: 20,          // 每秒回復
-    shakeCooldown: 0.04,
+    shakeCost: 20,
+    shakeMin: 20,            // 體力低於此值不能拍
+    shakeRegen: 25,          // 每秒回復
+    shakeCooldown: 0.06,
     shakeSide: 1.5,          // m/s 水平推力（方向由玩家選或交替）
     shakeVy: 3.2,            // m/s 向上
     shakeSpin: 1.2,          // rad/s
@@ -479,6 +481,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     record: true,            // 行動記錄（偵錯用）
     recMaxActions: 3000,     // 每段記錄最多保留的行動數
     liftOrderBias: 200,      // 合併上推：選自由區間時，違反「上推前的上下順序」（整塊翻到另一邊）的額外代價（px）；凹口／空腔不受影響
+    liftCrossBias: 200,      // 合併上推（v13）：選中的位置會讓任一對凸塊的上下關係對調（穿越）時的額外代價（px）
+    liftDeadlineBias: 300,   // 合併上推（v13）：上推讓區塊（更）超過淘汰線時的額外代價（px），另加增加的超出高度
     stuckSec: 7,             // 全部放下且靜止多久後標記卡關（st.stuck；v10 起不提示，只保留狀態以維持存檔相容）
     dt: 1 / 240,             // 固定模擬步長（秒）
     velIter: 10,             // Box2D 速度迭代次數
@@ -537,8 +541,9 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     let acc = 0;
     let simSteps = 0;
     // 合併上推的累計統計（V9）：merges 合併次數、pairs 處理的重疊對數、pocket 落在凹口／空腔（有上下界）的、
-    //   alt 改用次近自由區間的、flip 違反原本上下順序的、fail 無解（交給物理引擎）的
-    const newLiftStats = () => ({ merges: 0, pairs: 0, pocket: 0, alt: 0, flip: 0, fail: 0 });
+    //   alt 改用次近自由區間的、flip 違反原本上下順序的、fail 無解（交給物理引擎）的；
+    //   v13：cross 選中位置仍有穿越的、over 選中位置會超線的、avoid 因穿越或超線代價而改選的
+    const newLiftStats = () => ({ merges: 0, pairs: 0, pocket: 0, alt: 0, flip: 0, fail: 0, cross: 0, over: 0, avoid: 0 });
     let liftStats = newLiftStats();
 
     // 事件：給畫面（drainEvents）＋寫入行動記錄（兩個行動之間的事件）
@@ -762,14 +767,17 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     }
 
     // ---------------------------------------------------------- 幾何（凸多邊形，px）
+    // 剛體的所有凸塊（世界座標 px）。m＝縣市、k＝該縣市在此剛體中的第幾個凸塊：同一縣市的凸塊形狀與掛上的順序固定，
+    // 所以 (m, k) 在合併前後指的是同一個凸塊（v13 用來比對合併前後的局部上下關係）
     function bodyPolys(body) {
-      const out = [];
+      const out = [], seen = {};
       for (let f = body.getFixtureList(); f; f = f.getNext()) {
         const vs = f.getShape().m_vertices;
         const pts = vs.map((v) => { const p = body.getWorldPoint(v); return [p.x / S, p.y / S]; });
         let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
         for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-        out.push({ pts, b: [x0, y0, x1, y1] });
+        const m = f.getUserData(), k = seen[m] = seen[m] == null ? 0 : seen[m] + 1;
+        out.push({ pts, b: [x0, y0, x1, y1], m, k });
       }
       return out;
     }
@@ -918,6 +926,18 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       }
       return v;
     }
+    // 凸塊層級的上下關係（v13）：「x 凸塊|y 凸塊」→ +1（x 在上）／−1（x 在下）。只記水平有重疊、且目前沒有重疊的凸塊對
+    const polyKey = (P_) => P_.m + ":" + P_.k;
+    function localOrder(PX, PY) {
+      const out = new Map();
+      for (const A of PX) for (const B of PY) {
+        if (Math.min(A.b[2], B.b[2]) - Math.max(A.b[0], B.b[0]) <= 1) continue;
+        const ch = chordAtX(minkDiff(A.pts, B.pts), 0); if (!ch) continue;
+        const sg = ch[1] <= 0.5 ? 1 : ch[0] >= -0.5 ? -1 : 0;
+        if (sg) out.set(polyKey(A) + "|" + polyKey(B), sg);
+      }
+      return out;
+    }
 
     // ---------------------------------------------------------- 合併後的垂直上推（V9：垂直自由區間）
     // 每個區塊 g 只能垂直上升 d[g] ≥ 0（px）。對任兩個水平有重疊的區塊 i、j，令 r = d[j] − d[i]（j 比 i 多升多少）。
@@ -928,19 +948,25 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     //       化為差分約束 d[j] ≥ d[i] + G0、d[i] ≥ d[j] − G1，以最長路徑（Bellman-Ford）求最小上推；
     //       不可行（約束成正環）就換代價次小的自由區間；全部不可行 → 這一對不處理（交給物理引擎）。重複到沒有重疊為止。
     // 有上下界的自由區間（凹口／空腔）會讓兩個區塊一起升降：這取代 V6～V8 的「口袋綁定」與接觸上下關係。
-    function liftAfterMerge(ng, preOrder) {
+    // v13：每個可行的自由區間另加兩項代價，取總代價最小者（基本代價已不可能更小時提前停止）：
+    //   穿越：該區間會讓「合併前（新區塊相關的一對）或上推前（其他區塊對）」的任一對凸塊上下對調 → liftCrossBias
+    //         凸塊對在某自由區間的上下，由它自己的禁止區間判斷：區間在 lo 以下＝i 側在上，在 hi 以上＝i 側在下
+    //   超線：求出的上推量讓任一被上推的區塊比上推前更超過淘汰線 → liftDeadlineBias＋增加的超出高度
+    function liftAfterMerge(ng, preOrder, preLocal) {
       const DELTA = 1, TOL = 1, EPS = 1e-6;
       const gl = [...groups.values()], n = gl.length;
       const ngi = gl.indexOf(ng);
       const polys = gl.map((g) => bodyPolys(g.body));
       const xr = polys.map((ps) => { let a = 1e9, b = -1e9; for (const p of ps) { if (p.b[0] < a) a = p.b[0]; if (p.b[2] > b) b = p.b[2]; } return [a, b]; });
       const xOverlap = (i, j) => xr[i][1] - xr[j][0] > DELTA && xr[j][1] - xr[i][0] > DELTA;
+      const top0 = polys.map((ps) => Math.min(...ps.map((p) => p.b[1])));   // 上推前各區塊的最高點（px）
+      const DL = deadlineY();
       // 一對區塊（i < j）的禁止區間（已排序、合併）
-      const fcache = new Map();
+      const fcache = new Map(), fraw = new Map();   // fraw：各凸塊對自己的禁止區間 {lo, hi, key}（聯集前）
       function forbid(i, j) {
         const key = i * 4096 + j;
         if (fcache.has(key)) return fcache.get(key);
-        const iv = [];
+        const iv = [], raw = [];
         if (xOverlap(i, j)) {
           const mine = i === ngi || j === ngi;
           for (const A of polys[i]) for (const B of polys[j]) {
@@ -952,7 +978,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             if (hi <= lo) continue;
             // 兩個都不是新區塊、而且已經有輕微重疊（物理堆疊的殘餘）：允許維持現狀，只禁止更深
             if (!mine && lo < 0 && hi > 0) { if (hi < -lo) hi = 0; else lo = 0; }
-            iv.push([lo, hi]);
+            iv.push([lo, hi]); raw.push({ lo, hi, key: polyKey(A) + "|" + polyKey(B) });
           }
           iv.sort((a, b) => a[0] - b[0]);
           for (let k = 1; k < iv.length; k++) {
@@ -960,8 +986,42 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             if (q[0] <= p[1] + EPS) { p[1] = Math.max(p[1], q[1]); iv.splice(k, 1); k--; }
           }
         }
-        fcache.set(key, iv);
+        fcache.set(key, iv); fraw.set(key, raw);
         return iv;
+      }
+      // 上推前的局部上下關係（i 側凸塊在上＝+1）：新區塊相關的一對用合併前的 preLocal，其餘用目前位置
+      const rcache = new Map();
+      function rel0(i, j) {
+        const key = i * 4096 + j;
+        if (rcache.has(key)) return rcache.get(key);
+        let R;
+        if (i === ngi || j === ngi) {
+          R = new Map();
+          const src = preLocal && preLocal.get(gl[i === ngi ? j : i].id);   // 鍵為「新區塊凸塊|對方凸塊」
+          if (src) for (const [k, sg] of src) { if (i === ngi) R.set(k, sg); else { const [a, b] = k.split("|"); R.set(b + "|" + a, -sg); } }
+        } else R = localOrder(polys[i], polys[j]);
+        rcache.set(key, R); return R;
+      }
+      // 自由區間 [G0, G1] 會讓幾對凸塊的上下關係對調（穿越）
+      function crossings(i, j, G0, G1) {
+        const R = rel0(i, j); if (!R.size) return 0;
+        let c = 0;
+        for (const f of fraw.get(i * 4096 + j) || []) {
+          const s0 = R.get(f.key); if (!s0) continue;
+          const sg = G1 <= f.lo + EPS ? 1 : G0 >= f.hi - EPS ? -1 : 0;
+          if (sg && sg !== s0) c++;
+        }
+        return c;
+      }
+      // 上推量 dd 讓被上推的區塊比上推前多超出淘汰線多少 px（取最大者）
+      function overOf(dd) {
+        let add = 0;
+        for (let k = 0; k < n; k++) {
+          if (!(dd[k] > 0.05)) continue;
+          const t0 = top0[k], t1 = t0 - dd[k];
+          add = Math.max(add, Math.max(0, DL - t1) - Math.max(0, DL - t0));
+        }
+        return add;
       }
       // r 是否落在禁止區間裡；回傳區間索引或 -1
       const inside = (F, r) => { for (let k = 0; k < F.length; k++) if (F[k][0] < r - EPS && r + EPS < F[k][1]) return k; return -1; };
@@ -1009,7 +1069,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         return null;               // 正環：上下夾住、垂直上推無解
       };
       let d = solve();
-      const done = new Set(), stats = { pairs: 0, pocket: 0, alt: 0, flip: 0, fail: 0 };
+      const done = new Set(), stats = { pairs: 0, pocket: 0, alt: 0, flip: 0, fail: 0, cross: 0, over: 0, avoid: 0 };
       for (let iter = 0; iter < 4 * n * n; iter++) {
         // 找出所有目前重疊的一對；先處理新區塊相關的，再依脫離距離由小到大
         let best = null;
@@ -1024,20 +1084,32 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         if (!best) break;
         done.add(best.key);
         const gaps = gapsByDist(best.F, best.r, order(best.i, best.j));
-        let ok = false;
+        // 逐一試算可行的自由區間，總代價＝基本代價（距離＋翻面）＋穿越代價＋超線代價；gaps 已依基本代價排序，
+        // 額外代價不為負，所以基本代價已不小於目前最佳總代價時即可停止
+        let pick = null, first = -1;
         for (let a = 0; a < gaps.length; a++) {
-          const c = { i: best.i, j: best.j, G0: gaps[a][0], G1: gaps[a][1] };
-          cons.push(c);
-          const nd = solve();
-          if (nd) {
-            d = nd; ok = true; stats.pairs++;
-            if (c.G0 > -Infinity && c.G1 < Infinity) stats.pocket++;
-            if (a > 0) stats.alt++;
-            if (gaps[a].flip) stats.flip++;
-            if (P.debugLift) { const nm = (x) => gl[x].members.map((m) => pieces[m].name).join("+"); console.log("   [lift]", nm(c.i), "↔", nm(c.j), "r", best.r.toFixed(1), "→ 自由區間", c.G0.toFixed(1), "~", c.G1.toFixed(1), a > 0 ? `（第 ${a + 1} 近）` : "", "｜禁止", best.F.map((f) => f[0].toFixed(1) + "~" + f[1].toFixed(1)).join(" "), "｜順序", order(best.i, best.j)); }
-            break;
-          }
-          cons.pop();
+          const gp = gaps[a];
+          if (pick && gp.cost >= pick.total) break;
+          const c = { i: best.i, j: best.j, G0: gp[0], G1: gp[1] };
+          cons.push(c); const nd = solve(); cons.pop();
+          if (!nd) continue;
+          if (first < 0) first = a;
+          const cross = P.liftCrossBias > 0 ? crossings(best.i, best.j, gp[0], gp[1]) : 0;
+          const over = P.liftDeadlineBias > 0 ? overOf(nd) : 0;
+          const total = gp.cost + (cross ? P.liftCrossBias : 0) + (over > 0.5 ? P.liftDeadlineBias + over : 0);
+          if (!pick || total < pick.total) pick = { a, c, nd, cross, over, total };
+        }
+        const ok = !!pick;
+        if (pick) {
+          cons.push(pick.c); d = pick.nd; stats.pairs++;
+          const c = pick.c, gp = gaps[pick.a];
+          if (c.G0 > -Infinity && c.G1 < Infinity) stats.pocket++;
+          if (pick.a > 0) stats.alt++;
+          if (gp.flip) stats.flip++;
+          if (pick.cross) stats.cross++;
+          if (pick.over > 0.5) stats.over++;
+          if (pick.a !== first) stats.avoid++;
+          if (P.debugLift) { const nm = (x) => gl[x].members.map((m) => pieces[m].name).join("+"); console.log("   [lift]", nm(c.i), "↔", nm(c.j), "r", best.r.toFixed(1), "→ 自由區間", c.G0.toFixed(1), "~", c.G1.toFixed(1), pick.a > 0 ? `（第 ${pick.a + 1} 近）` : "", `｜總代價 ${pick.total.toFixed(1)}（穿越 ${pick.cross} 對、超線 ${pick.over.toFixed(1)}px${pick.a !== first ? "、已避開較近的區間" : ""}）`, "｜禁止", best.F.map((f) => f[0].toFixed(1) + "~" + f[1].toFixed(1)).join(" "), "｜順序", order(best.i, best.j)); }
         }
         if (!ok) stats.fail++;
       }
@@ -1121,11 +1193,14 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       // 合併前「舊的兩個區塊與其他區塊」的實際上下（> 0：新區塊在上）：上推時優先維持；測試用也拿來檢查上推後有沒有上下對調
       const preOrder = new Map();
       for (const g of groups.values()) if (g !== gA && g !== gB && g !== ng) { const o = verticalOrder(gA, g) + verticalOrder(gB, g); if (o) preOrder.set(g.id, o); }
+      // v13：合併前的凸塊層級上下關係（鍵為「新區塊凸塊|對方凸塊」），上推時用來判斷是否穿越
+      const preLocal = new Map(), pAB = bodyPolys(bA).concat(bodyPolys(bB));
+      if (P.liftCrossBias > 0) for (const g of groups.values()) if (g !== gA && g !== gB && g !== ng) { const lm = localOrder(pAB, bodyPolys(g.body)); if (lm.size) preLocal.set(g.id, lm); }
       const pre = P.debugSwap ? [...preOrder].map(([id, r]) => [groups.get(id), r]) : null;
       // 移除舊剛體後做垂直上推
       world.destroyBody(bA); world.destroyBody(bB);
       groups.delete(gA.id); groups.delete(gB.id);
-      const lift = liftAfterMerge(ng, preOrder);
+      const lift = liftAfterMerge(ng, preOrder, preLocal);
       let swaps;
       if (pre) { swaps = 0; for (const [g, r] of pre) if (groups.has(g.id) && Math.sign(r) * verticalOrder(ng, g) < 0) { swaps++; if (P.debugSwapLog) console.log("   [對調]", members.map((m) => pieces[m].name).join("+"), "｜", g.members.map((m) => pieces[m].name).join("+"), "合併前", r > 0 ? "新區塊在上" : "新區塊在下", "上推", lift.lift.toFixed(0), "maxd", lift.maxd.toFixed(0)); } }
 
@@ -1418,7 +1493,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   function makeReplayer(opts) {
     if (!opts.log || opts.log.format !== "tw-puzzle-log") throw new Error("不是行動記錄檔");
     const log = normalizeLog(opts.log);
-    const core = create({ planck: opts.planck, shapes: opts.shapes, params: Object.assign({}, log.params, { record: false, canonical: false }) });
+    // v13 以前的記錄沒有穿越／超線代價參數：當作 0，才能照當時的規則重放
+    const core = create({ planck: opts.planck, shapes: opts.shapes, params: Object.assign({ liftCrossBias: 0, liftDeadlineBias: 0 }, log.params, { record: false, canonical: false }) });
     const clone = (o) => JSON.parse(JSON.stringify(o));
     // 每段的比對點：{ i：在 actions 中的索引（−1＝段落開頭），end：是否為匯出當下 }
     const pts = log.segments.map((sg) => {
@@ -1477,7 +1553,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  * v11：說明分層——說明視窗（規則／操作／畫面，首次開啟自動顯示，可隨時叫出）、標題旁的說明鈕、畫布上方提示條、
  *      一次性提示（看過就不再出現，可在設定重設）；「結束」改為「選單」並暫停遊戲；新局參數（地圖、澎湖規則、拍打模式）
  *      移到選單的「新局設定」，代入目前的值供快速開局；鄰接提示開關移到設定。
- * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。 */
+ * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。
+ * v13：合併上推加入「穿越」與「超線」代價（core.js liftAfterMerge）（兩項代價不開放在調參修改）；摘要顯示避開／仍穿越／超線的次數。 */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1936,7 +2013,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const D = window.TPCore.DEFAULTS;
     const changed = Object.keys(log.params).filter((k) => k in D && JSON.stringify(log.params[k]) !== JSON.stringify(D[k])).map((k) => `${k}=${log.params[k]}`);
     const evText = (evs) => (evs || []).map((e) => {
-      if (e.type === "merge") return `${nm(e.a)}＋${nm(e.b)} 合併 → ${e.size} 縣市（上推 ${Math.round(e.lift || 0)}px${e.carried ? `，帶動 ${e.carried} 區塊` : ""}${e.gaps && e.gaps.pocket ? `，凹口容身 ${e.gaps.pocket}` : ""}${e.gaps && e.gaps.fail ? `，無解 ${e.gaps.fail} 對` : ""}）`;
+      if (e.type === "merge") return `${nm(e.a)}＋${nm(e.b)} 合併 → ${e.size} 縣市（上推 ${Math.round(e.lift || 0)}px${e.carried ? `，帶動 ${e.carried} 區塊` : ""}${e.gaps && e.gaps.pocket ? `，凹口容身 ${e.gaps.pocket}` : ""}${e.gaps && e.gaps.fail ? `，無解 ${e.gaps.fail} 對` : ""}${e.gaps && e.gaps.avoid ? `，避開穿越／超線 ${e.gaps.avoid} 次` : ""}${e.gaps && e.gaps.cross ? `，仍穿越 ${e.gaps.cross} 對` : ""}${e.gaps && e.gaps.over ? `，超線 ${e.gaps.over} 對` : ""}）`;
       if (e.type === "win") return "★ 完成";
       if (e.type === "lose") return "✗ 超過淘汰線，遊戲結束";
       if (e.type === "stuck") return "卡關提示";   // 只出現在 v9 的記錄檔；v10 不再發出 stuck 事件
