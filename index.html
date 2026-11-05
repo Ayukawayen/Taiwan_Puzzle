@@ -297,13 +297,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             <h4 id="h-deadline">淘汰線</h4>
             <ul>
               <li>落地的拼圖只要有一點高過紅色淘汰線，就開始倒數。</li>
-              <li>倒數是<b>累積</b>的：回到線下後會慢慢回復，不會立刻歸零。累積滿 <b data-p="graceSec">6</b> 秒，這局就結束。</li>
+              <li>倒數是<b>累積</b>的：回到線下後會慢慢回復，不會立刻歸零。累積秒數超過時，這局就結束。</li>
               <li>合併時區塊會滑到正確位置，有時會把其他區塊往上推，留意高度。</li>
             </ul>
             <h4>幫手</h4>
             <ul>
               <li><b>保留區</b>：先把手上這塊存起來，換下一塊上手，之後再取出。只有 1 格，最後一塊不能保留。</li>
-              <li><b>拍打機台</b>：讓所有區塊一起往左或往右彈一下，幫卡住的區塊互相碰到。每拍一次耗 <span data-p="shakeCost">20</span> 體力，體力低於 <span data-p="shakeMin">20</span> 不能拍，每秒回復 <span data-p="shakeRegen">25</span>。</li>
+              <li><b>拍打機台</b>：讓所有區塊一起往左上或往右上彈一下，每次拍打要耗費體力，體力會隨時間回復。</li>
             </ul>
             <h4 id="h-penghu">澎湖（選用地圖）</h4>
             <ul>
@@ -467,10 +467,10 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     edgeW: 2,                // 顯示用：外框線寬（螢幕 px 的下限對應見 ui.js）
     shakeAlt: false,         // 拍打模式：false＝自選左右；true＝左右交替（單數次向左、雙數次向右，不可選）
     shakeMax: 100,
-    shakeCost: 20,
-    shakeMin: 20,            // 體力低於此值不能拍
-    shakeRegen: 25,          // 每秒回復
-    shakeCooldown: 0.06,
+    shakeCost: 10,
+    shakeMin: 10,            // 體力低於此值不能拍
+    shakeRegen: 20,          // 每秒回復
+    shakeCooldown: 0.04,
     shakeSide: 1.5,          // m/s 水平推力（方向由玩家選或交替）
     shakeVy: 3.2,            // m/s 向上
     shakeSpin: 1.2,          // rad/s
