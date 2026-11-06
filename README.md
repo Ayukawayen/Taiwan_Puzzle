@@ -1,4 +1,4 @@
-用落下的拼圖組合出台灣
+用落下的拼圖組合出台灣，相鄰縣市碰在一起就會合併(不需要方向位置正確)
 
 https://ayukawayen.github.io/Taiwan_Puzzle/
 
