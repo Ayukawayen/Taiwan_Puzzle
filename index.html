@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v14</title>
+<title>台灣拼圖合成 v15</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -203,6 +203,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     <span class="tag" id="modeTag">本島 19 塊</span>
     <span class="spacer"></span>
     <button id="btnHelp" type="button" class="hbtn" title="說明（?）"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.2a1.9 1.9 0 1 1 2.7 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".95" fill="currentColor"/></svg><span>說明</span></button>
+    <button id="btnSound" type="button" class="hbtn" aria-pressed="true" aria-label="音效開關"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor"/><path id="sndWave" d="M10.4 5.6a3.2 3.2 0 0 1 0 4.8M12.3 3.8a5.8 5.8 0 0 1 0 8.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path id="sndX" d="M10.5 6l3.6 4M14.1 6l-3.6 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none"/></svg><span>音效</span></button>
     <button id="btnSettings" type="button" class="hbtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><g stroke="currentColor" stroke-width="1.5" style="fill:var(--panel)"><circle cx="5" cy="4" r="1.7"/><circle cx="10.6" cy="8" r="1.7"/><circle cx="6.6" cy="12" r="1.7"/></g></svg><span>設定</span></button>
     <button id="btnMenu" type="button" class="hbtn" title="選單：暫停（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>選單</span></button>
   </header>
@@ -260,6 +261,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
           <h3 id="stTitle">設定</h3>
           <div class="fields"><label for="selTheme">外觀（立即生效）</label><select id="selTheme"><option value="system">系統</option><option value="light">淺色</option><option value="dark">深色</option></select></div>
           <div class="fields"><span class="lb"><label for="chkHint">鄰接提示（立即生效）</label><button type="button" class="info" data-help="screen:h-hint" aria-label="鄰接提示說明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.7" r="1.15" fill="currentColor"/><path d="M8 7.3v4.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span><input type="checkbox" id="chkHint"></div>
+          <div class="fields"><label for="chkSound">音效（M）</label><input type="checkbox" id="chkSound"></div>
+          <div class="fields"><label for="rngVol">音量</label><input type="range" id="rngVol" min="0" max="100" step="1"></div>
           <div class="fields"><span>一次性提示與說明</span><button id="stTips" type="button">重新顯示</button></div>
           <div class="fields"><label for="chkDebug">偵錯工具（內部測試，立即生效）</label><input type="checkbox" id="chkDebug"></div>
           <p class="note">以下參數按「套用並重來」後生效，並會重新開始一局。</p>
@@ -326,6 +329,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
               <dt><kbd>S</kbd></dt><dd>拍打（左右交替模式依序左右；自選模式沿用上一次的方向）</dd>
               <dt><kbd>Esc</kbd></dt><dd>打開或關閉選單（暫停）</dd>
               <dt><kbd>?</kbd></dt><dd>打開說明</dd>
+              <dt><kbd>M</kbd></dt><dd>音效開關</dd>
             </dl></section>
           </div>
           <div class="hp" data-pane="screen" role="tabpanel" hidden>
@@ -528,7 +532,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
     // ---------------------------------------------------------- 狀態
-    let world = null, wallBody = null;
+    let world = null, wallBody = null, impacts = [];
     let groups = new Map();         // gid → {id, members, pivot:[x,y], body, landed}
     let groupOf = [];               // county → gid
     let nextGid = 1;
@@ -611,6 +615,19 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       S = P.S;
       world = new planck.World({ gravity: Vec2(0, P.gravity * S) });
       world.setAllowSleeping(true);
+      // v15 音效：接觸開始時記錄法向相對速度（m/s）與位置，供畫面播碰撞聲；只讀取，不改變模擬
+      impacts = [];
+      world.on("begin-contact", (c) => {
+        if (impacts.length >= 64) return;
+        const A = c.getFixtureA().getBody(), B = c.getFixtureB().getBody();
+        const wm = c.getWorldManifold(null);
+        if (!wm || !wm.normal) return;
+        const p = wm.points && wm.points.length && c.getManifold().pointCount > 0 ? wm.points[0] : B.getWorldCenter();
+        const va = A.getLinearVelocityFromWorldPoint(p), vb = B.getLinearVelocityFromWorldPoint(p);
+        const v = Math.abs((vb.x - va.x) * wm.normal.x + (vb.y - va.y) * wm.normal.y);
+        const ia = A.getUserData(), ib = B.getUserData();
+        impacts.push({ a: typeof ia === "number" ? ia : -1, b: typeof ib === "number" ? ib : -1, v, x: p.x / S, y: p.y / S });
+      });
       groups = new Map(); groupOf = new Array(N).fill(-1); nextGid = 1;
       tweens = new Array(N).fill(null);
       events = []; acc = 0; simSteps = 0;
@@ -1380,6 +1397,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       return out;
     }
     function drainEvents() { const e = events; events = []; return e; }
+    function drainImpacts() { const e = impacts; impacts = []; return e; }
 
     // ---------------------------------------------------------- 存檔
     const SAVE_VERSION = 6;   // V9：拿掉接觸上下關係（V8＝5：加 shakeCd、stillT、stuck；還原時亂數種子由快照內容決定）。讀取時也接受 5（忽略 rel）。v10 存檔格式不變
@@ -1450,7 +1468,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const api = {
       N, pieces, adj, idxByName, P, penghuIdx,
       newGame, restore, serialize, update, stepOnce, drop, shake, canShake,
-      setHeldX, heldPose, nextPreview, unplaced, dropPreview, previewVisible, fallTime, hold, retrieve, canHold, canRetrieve, nextShakeDir, maxPenetration, penPairs, deepIn, countyPose, groupsInfo, drainEvents, setParams,
+      setHeldX, heldPose, nextPreview, unplaced, dropPreview, previewVisible, fallTime, hold, retrieve, canHold, canRetrieve, nextShakeDir, maxPenetration, penPairs, deepIn, countyPose, groupsInfo, drainEvents, drainImpacts, setParams,
       groupAABB: (gid) => groupAABB(groups.get(gid)),
       exportLog, get log() { return rec; }, restoreState,
       get liftStats() { return liftStats; },
@@ -1854,13 +1872,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   // 任何視窗打開時遊戲暫停：不推進模擬，也不接受放下、拍打、保留（側欄按鈕在視窗外仍可點，所以這裡要擋）
   const paused = () => anyOverlayOpen();
   function doDrop() { if (!paused() && core.drop()) saveNow(); }
-  function doShake(dir) { if (core && !paused() && core.shake(dir)) { shakeAmp = 1; saveNow(); } }
+  function doShake(dir) { if (core && !paused()) { if (core.shake(dir)) { shakeAmp = 1; saveNow(); } else if (core.state.status === "playing") SFX.deny(); } }
   // 保留／取出共用一個鍵：能保留就保留，否則能取出就取出
   function doHoldToggle() {
     if (!core || paused()) return;
     if (core.canHold()) { core.hold(); if (tipOnce("hold")) setMsg("已放進保留區。再按一次「取出」，就能把它換回手上。"); saveNow(); }
     else if (core.canRetrieve()) { const had = core.state.held != null; core.retrieve(); if (had && tipOnce("retrieve")) setMsg("已取出；原本手上那塊排回「下一塊」。"); slotHint = false; saveNow(); }
-    else if (core.state.status === "playing" && core.state.held != null) setMsg("最後一塊不能保留。");
+    else if (core.state.status === "playing" && core.state.held != null) { SFX.deny(); setMsg("最後一塊不能保留。"); }
   }
   const OVERLAYS = ["ovEnd", "ovSettings", "ovHelp", "ovConfirm"];   // 由下而上（與 DOM 順序相同，後者蓋在前者上面）
   const anyOverlayOpen = () => OVERLAYS.some((id) => !$(id).hidden);
@@ -2405,11 +2423,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       const was = st.status;
       if (!pz) core.update(dt);
       for (const e of core.drainEvents()) {
+        sfxEvent(e);
         if (e.type === "merge") {
           rings.push({ x: e.pos[0], y: e.pos[1], t0: ts, size: e.size });
           setMsg(`${core.pieces[e.a].name}＋${core.pieces[e.b].name} 合併・${e.size} 縣市`);
         }
       }
+      sfxImpacts(ts); sfxDanger(dt, pz);
       if (st.over && st.status === "playing" && tipOnce("over")) setMsg(`超過淘汰線了！累積 ${core.P.graceSec} 秒就結束；回到線下，倒數會慢慢回復。`, 6000);
       if (was === "playing" && st.status !== "playing") { saveNow(); showEnd(); }
       shakeAmp *= Math.pow(0.002, dt);
@@ -2447,6 +2467,267 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     }
     requestAnimationFrame(frame);
   }
+
+
+  // ------------------------------------------------------------ 音效（v15）
+  // 全部以 Web Audio 即時合成，不需外部音檔。材質設定：實木拼圖片＋會被拍打的木箱機台。
+  // 玩家操作是短而乾的機械聲；合併才有音高（五聲音階，區塊越大音越高，拼完剛好走完一段上行音階）。
+  const SFX = (() => {
+    const KEY = "tw-puzzle-sfx";
+    const pref = Object.assign({ on: true, vol: 0.8 }, store.get(KEY) || {});
+    const PENTA = [0, 2, 4, 7, 9];
+    const BASE = 146.83;   // D3
+    let ac = null, master = null, sfxBus = null, colBus = null, noiseBuf = null;
+    let muteColUntil = 0, lastChime = 0, lastNoteAt = 0, combo = 0;
+    function save() { store.set(KEY, { on: pref.on, vol: pref.vol }); }
+    function ensure() {
+      if (!pref.on) return null;
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
+        master = ac.createGain(); master.gain.value = pref.vol * pref.vol;
+        master.connect(comp); comp.connect(ac.destination);
+        sfxBus = ac.createGain(); sfxBus.connect(master);
+        colBus = ac.createGain(); colBus.gain.value = 0.9; colBus.connect(master);   // 碰撞獨立一條，合併時壓低（ducking）
+        noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (ac.state === "suspended") ac.resume().catch(() => {});
+      return ac;
+    }
+    const live = () => pref.on && ac && ac.state === "running";
+    function dest(pan, bus) {
+      const b = bus || sfxBus;
+      if (!pan || !ac.createStereoPanner) return b;
+      const p = ac.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); p.connect(b);
+      return p;
+    }
+    function env(g, t, a, d, peak) {
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+    }
+    // 振盪器：f → f2 指數滑音
+    function tone(o) {
+      const t = ac.currentTime + (o.at || 0), a = o.a || 0.002, d = o.d || 0.1;
+      const osc = ac.createOscillator(), g = ac.createGain();
+      osc.type = o.type || "sine";
+      osc.frequency.setValueAtTime(o.f, t);
+      if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + a + d);
+      env(g, t, a, d, o.g);
+      osc.connect(g); g.connect(o.out || dest(o.pan, o.bus));
+      osc.start(t); osc.stop(t + a + d + 0.05);
+      return osc;
+    }
+    // 濾波噪音：f → f2 掃頻
+    function noise(o) {
+      const t = ac.currentTime + (o.at || 0), a = o.a || 0.002, d = o.d || 0.05;
+      const src = ac.createBufferSource(), flt = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = noiseBuf; src.playbackRate.value = 0.8 + Math.random() * 0.4;
+      flt.type = o.ft || "bandpass"; flt.frequency.setValueAtTime(o.f, t); flt.Q.value = o.q || 1;
+      if (o.f2) flt.frequency.exponentialRampToValueAtTime(o.f2, t + a + d);
+      env(g, t, a, d, o.g);
+      src.connect(flt); flt.connect(g); g.connect(o.out || dest(o.pan, o.bus));
+      src.start(t, Math.random() * 0.5); src.stop(t + a + d + 0.05);
+    }
+    function duck(amount, dur) {
+      const t = ac.currentTime, p = colBus.gain;
+      p.cancelScheduledValues(t); p.setValueAtTime(p.value, t);
+      p.linearRampToValueAtTime(0.9 * amount, t + 0.02); p.linearRampToValueAtTime(0.9, t + dur);
+    }
+    const noteF = (step) => BASE * Math.pow(2, (12 * Math.floor(step / 5) + PENTA[((step % 5) + 5) % 5]) / 12);
+    // 木琴音色：基音＋第 4、10 泛音（馬林巴琴的泛音比例）
+    function mallet(f, at, g, pan, long) {
+      const out = dest(pan);
+      tone({ f, d: long ? 1.6 : 0.9, g, at, out });
+      tone({ type: "triangle", f, d: 0.25, g: g * 0.25, at, out });
+      tone({ f: f * 4, d: 0.14, g: g * 0.3, at, out });
+      if (f * 10 < 9000) tone({ f: f * 10, d: 0.04, g: g * 0.12, at, out });
+    }
+
+    // ---- 玩家動作
+    function drop() {
+      if (!live()) return;
+      noise({ ft: "highpass", f: 3200, q: 0.7, d: 0.025, g: 0.22 });
+      tone({ type: "triangle", f: 1900, f2: 1250, d: 0.035, g: 0.09 });
+    }
+    function click(at, pan) {
+      noise({ ft: "highpass", f: 2600, d: 0.02, g: 0.25, at, pan });
+      tone({ type: "triangle", f: 1500, f2: 1100, d: 0.03, g: 0.1, at, pan });
+    }
+    function hold() {   // 滑進抽屜（音高往上）＋關上
+      if (!live()) return;
+      noise({ f: 500, f2: 2600, q: 2.2, a: 0.04, d: 0.15, g: 0.28 });
+      click(0.17);
+    }
+    function retrieve() {   // 反過來：打開＋滑出（音高往下）
+      if (!live()) return;
+      click(0);
+      noise({ f: 2600, f2: 500, q: 2.2, a: 0.03, d: 0.16, g: 0.28, at: 0.03 });
+    }
+    function deny() {   // 悶悶的「咚」
+      if (!ensure()) return;
+      tone({ f: 130, f2: 85, d: 0.14, g: 0.4 });
+      noise({ ft: "lowpass", f: 350, d: 0.07, g: 0.3 });
+    }
+    function shake(dir) {   // 手掌拍木箱＋全場拼圖跳起來的沙沙聲
+      if (!live()) return;
+      const pan = dir * 0.55;
+      tone({ f: 95, f2: 40, d: 0.32, g: 0.85, pan });
+      tone({ type: "triangle", f: 190, f2: 110, d: 0.08, g: 0.25, pan });
+      noise({ ft: "lowpass", f: 600, d: 0.12, g: 0.55, pan });
+      noise({ f: 1400, q: 0.8, d: 0.03, g: 0.25, pan });
+      for (let i = 0; i < 16; i++) {
+        const at = 0.04 + Math.pow(Math.random(), 1.4) * 0.42, f = 500 + Math.random() * 1500;
+        const gp = (0.05 + Math.random() * 0.08) * (1 - at * 1.2);
+        tone({ type: "triangle", f, f2: f * 0.8, d: 0.025, g: gp, at, pan: dir * 0.3 + (Math.random() - 0.5) * 0.8, bus: colBus });
+      }
+      muteColUntil = ac.currentTime + 0.4;   // 拍打後個別碰撞聲讓給沙沙聲
+    }
+
+    // ---- 拼圖事件
+    // v：相對速度 m/s；f：依面積的音高；boost：剛放下那塊的第一次落地
+    function knock(v, f, pan, boost) {
+      if (!live() || ac.currentTime < muteColUntil) return;
+      const g = Math.min(0.55, Math.pow(Math.max(0, v - 0.5) / 4, 0.8) * 0.45) * (boost ? 1.5 : 1);
+      if (g < 0.015) return;
+      const d = 0.05 + Math.min(0.08, 30 / f);
+      tone({ f, f2: f * 0.82, d, g, pan, bus: colBus });
+      tone({ type: "triangle", f: f * 2.6, d: 0.025, g: g * 0.25, pan, bus: colBus });
+      noise({ f: f * 2, q: 2.5, d: 0.025, g: g * 0.6, pan, bus: colBus });
+      if (boost) noise({ ft: "lowpass", f: 500, d: 0.06, g: g * 0.6, pan, bus: colBus });
+    }
+    // 合併：吸附（補間結束時）→ 音階；嵌入式用更深的「噗」；推動其他區塊時加嘎吱聲
+    function merge(o) {
+      if (!live()) return;
+      const now = ac.currentTime;
+      combo = now - lastNoteAt < 0.8 ? combo + 1 : 0;
+      const at = Math.max(o.delay, lastChime + 0.09 - now);   // 連續合併拉開成琶音
+      lastChime = now + at; lastNoteAt = now;
+      const out = dest(o.pan);
+      if (o.inlay) {
+        tone({ f: 320, f2: 110, d: 0.13, g: 0.5, at: at - 0.02, out });
+        noise({ ft: "lowpass", f: 900, d: 0.05, g: 0.35, at: at - 0.02, out });
+      } else {
+        noise({ ft: "highpass", f: 2400, d: 0.018, g: 0.4, at: at - 0.02, out });
+        tone({ type: "triangle", f: 2300, f2: 1500, d: 0.025, g: 0.14, at: at - 0.02, out });
+        tone({ f: 170, f2: 115, d: 0.07, g: o.metro ? 0.45 : 0.28, at: at - 0.02, out });
+      }
+      const f = noteF(o.step);
+      mallet(f, at, 0.32, o.pan);
+      if (o.metro) tone({ f: f / 2, d: 1.1, g: 0.22, at, out });
+      if (combo > 0) tone({ f: f * 2, d: 0.35, g: Math.min(0.12, 0.04 * combo), at: at + 0.05, out });
+      if (o.lift > 6) {   // 木頭受力的嘎吱聲
+        const g = Math.min(0.2, o.lift / 250), t = ac.currentTime + at;
+        const osc = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain(), flt = ac.createBiquadFilter(), eg = ac.createGain();
+        osc.type = "sawtooth"; osc.frequency.value = 62;
+        lfo.frequency.value = 23; lg.gain.value = 18; lfo.connect(lg); lg.connect(osc.frequency);
+        flt.type = "bandpass"; flt.frequency.setValueAtTime(650, t); flt.frequency.linearRampToValueAtTime(900, t + 0.35); flt.Q.value = 7;
+        env(eg, t, 0.06, 0.34, g);
+        osc.connect(flt); flt.connect(eg); eg.connect(out);
+        osc.start(t); lfo.start(t); osc.stop(t + 0.5); lfo.stop(t + 0.5);
+      }
+      duck(0.35, 0.5);
+    }
+    // 淘汰線倒數：心跳，越接近結束越快、越大聲
+    function heartbeat(ratio, over) {
+      if (!live()) return;
+      const g = (0.25 + 0.45 * ratio) * (over ? 1 : 0.5);
+      tone({ f: 62, f2: 44, d: 0.16, g });
+      if (over) tone({ f: 58, f2: 42, d: 0.14, g: g * 0.6, at: 0.15 });
+    }
+    function win(total) {
+      if (!live()) return;
+      const top = total - 2;
+      for (let i = 0; i < 9; i++) mallet(noteF(top - 8 + i), 0.08 * i, 0.22, (i - 4) * 0.12);
+      [0, 2, 4, 5].forEach((s, k) => mallet(noteF(top - 5 + s) / (k === 0 ? 2 : 1), 0.8, 0.2, 0, true));
+    }
+    function lose() {
+      if (!live()) return;
+      for (let i = 0; i < 5; i++) mallet(noteF(9 - i * 2), 0.14 * i, 0.22, 0);
+      tone({ f: 80, f2: 38, d: 0.6, g: 0.7, at: 0.72 });
+      noise({ ft: "lowpass", f: 400, d: 0.3, g: 0.4, at: 0.72 });
+    }
+    function setOn(v) {
+      pref.on = !!v; save();
+      if (pref.on) { ensure(); if (live()) click(0); } else if (ac) ac.suspend().catch(() => {});
+    }
+    function setVol(v) { pref.vol = v; save(); if (master) master.gain.setTargetAtTime(v * v, ac.currentTime, 0.02); }
+    // 瀏覽器要求在使用者手勢後才能出聲
+    const unlock = () => ensure();
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
+    return { pref, drop, hold, retrieve, deny, shake, knock, merge, heartbeat, win, lose, setOn, setVol, now: () => (ac ? ac.currentTime : 0) };
+  })();
+
+  // 物理碰撞 → 敲擊聲：每區塊冷卻 0.09 秒、每格畫面最多 3 聲；剛放下那塊的第一次落地加重
+  const sfxCol = { cd: new Map(), fresh: -1, freshT: 0, beatT: 0 };
+  function sfxImpacts(ts) {
+    const list = core.drainImpacts();
+    if (!list.length || !SFX.pref.on) return;
+    const now = ts / 1000, P = core.P, gof = core.groupOf;
+    let info = null, played = 0;
+    const freshG = sfxCol.fresh >= 0 && now - sfxCol.freshT < 3 ? gof[sfxCol.fresh] : -1;
+    list.sort((p, q) => q.v - p.v);
+    for (const im of list) {
+      if (played >= 3) break;
+      const gid = im.a >= 0 ? im.a : im.b;
+      if (gid < 0) continue;
+      const isFresh = freshG >= 0 && (im.a === freshG || im.b === freshG);
+      if (im.v < (isFresh ? 0.4 : 0.7)) continue;
+      const k = isFresh ? freshG : gid;
+      if (now - (sfxCol.cd.get(k) || -1) < 0.09) continue;
+      sfxCol.cd.set(k, now);
+      if (!info) { info = new Map(); for (const g of core.groupsInfo()) info.set(g.id, g.members.reduce((s, m) => s + core.pieces[m].areaDisplay, 0)); }
+      const area = info.get(k) || 20000;
+      const f = Math.max(150, Math.min(1500, 520 * Math.sqrt(20822 / area)));
+      SFX.knock(im.v, f, (im.x / P.containerW) * 1.6 - 0.8, isFresh);
+      if (isFresh) sfxCol.fresh = -1;
+      played++;
+    }
+  }
+  function sfxEvent(e) {
+    const P = core.P;
+    if (e.type === "drop") { SFX.drop(); sfxCol.fresh = e.county; sfxCol.freshT = performance.now() / 1000; }
+    else if (e.type === "hold") SFX.hold();
+    else if (e.type === "retrieve") SFX.retrieve();
+    else if (e.type === "shake") SFX.shake(e.dir);
+    else if (e.type === "merge") {
+      const na = core.pieces[e.a], nb = core.pieces[e.b], pair = na.name + nb.name;
+      const inlay = /臺北市/.test(pair) && /新北市/.test(pair) || /嘉義市/.test(pair) && /嘉義縣/.test(pair);
+      SFX.merge({ step: e.size - 2, pan: (e.pos[0] / P.containerW) * 1.4 - 0.7, delay: P.tweenSec * 0.85, inlay,
+        metro: na.category === "直轄市" || nb.category === "直轄市", lift: e.lift || 0 });
+    }
+    else if (e.type === "win") SFX.win(core.N);
+    else if (e.type === "lose") SFX.lose();
+  }
+  function sfxDanger(dt, pz) {
+    const st = core.state;
+    if (pz || st.status !== "playing" || st.grace <= 0) { sfxCol.beatT = 0; return; }
+    const ratio = Math.min(1, st.grace / core.P.graceSec);
+    sfxCol.beatT -= dt;
+    if (sfxCol.beatT <= 0) { SFX.heartbeat(ratio, st.over); sfxCol.beatT = st.over ? 0.9 - 0.55 * ratio : 1.1; }
+  }
+  function syncSoundUi() {
+    const on = SFX.pref.on;
+    $("btnSound").setAttribute("aria-pressed", String(on));
+    $("btnSound").title = on ? "音效：開（M）" : "音效：關（M）";
+    $("sndWave").style.display = on ? "" : "none"; $("sndX").style.display = on ? "none" : "";
+    $("chkSound").checked = on; $("rngVol").value = String(Math.round(SFX.pref.vol * 100));
+  }
+  function toggleSound() { SFX.setOn(!SFX.pref.on); syncSoundUi(); }
+  $("btnSound").addEventListener("click", toggleSound);
+  $("chkSound").addEventListener("change", (e) => { SFX.setOn(e.target.checked); syncSoundUi(); });
+  $("rngVol").addEventListener("input", (e) => SFX.setVol(Number(e.target.value) / 100));
+  window.addEventListener("keydown", (e) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (e.key === "m" || e.key === "M") toggleSound();
+  });
+  syncSoundUi();
 
   // ------------------------------------------------------------ 啟動
   function boot() {
