@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v13</title>
+<title>台灣拼圖合成 v14</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -194,7 +194,6 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 .fields.ng { grid-template-columns: auto minmax(0, 1fr); }
 .lb { display: inline-flex; align-items: center; gap: 6px; }
 .fields > button { min-height: 32px; padding: 4px 8px; }
-.card.debug pre { margin: 0; max-height: 180px; overflow: auto; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; color: var(--ink-soft); }
 @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
 
@@ -234,11 +233,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       </section>
       <section class="card debug" id="dbgCard" hidden>
         <h2>偵錯（內部測試）</h2>
-        <div class="row"><button id="dbgExport" type="button">匯出記錄</button><button id="dbgSummary" type="button">列印摘要</button></div>
-        <div class="row"><button id="dbgLoad" type="button">讀記錄檔重放…</button><button id="dbgCurrent" type="button">重放本局</button></div>
-        <input type="file" id="dbgFile" accept=".json,application/json" hidden>
-        <div class="row"><button id="dbgStep" type="button" disabled>單步</button><button id="dbgAll" type="button" disabled>全部</button></div>
-        <pre id="dbgOut">尚未載入記錄。</pre>
+        <div class="row"><button id="dbgExport" type="button">匯出記錄</button></div>
       </section>
     </aside>
     <section class="board" id="board">
@@ -2070,7 +2065,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   }
   // 重放（唯讀）：另建一個核心，不影響進行中的遊戲
   let rp = null, rpSeg = 0, rpJ = 0;
-  const dbgOut = (t, append) => { const el = $("dbgOut"); el.textContent = append ? el.textContent + "\n" + t : t; el.scrollTop = el.scrollHeight; };
+  const dbgOut = (t, append) => { const el = $("dbgOut"); if (!el) { console.log(t); return; } el.textContent = append ? el.textContent + "\n" + t : t; el.scrollTop = el.scrollHeight; };
   function rpLine(r) {
     if (!r) return "（沒有下一步）";
     const head = `段${r.seg + 1} 轉移${r.j}：${r.from} → ${r.to}（${r.steps} 步／${r.sec}s${r.lights ? `，含保留／取出 ${r.lights} 筆` : ""}）`;
@@ -2081,7 +2076,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   }
   function loadReplay(log, label) {
     try { rp = window.TPCore.makeReplayer({ planck: window.planck, shapes, log }); } catch (e) { rp = null; dbgOut("無法載入：" + e.message); return; }
-    rpSeg = 0; rpJ = 0; $("dbgStep").disabled = false; $("dbgAll").disabled = false;
+    rpSeg = 0; rpJ = 0;
     const total = log.segments.reduce((s, _, i) => s + rp.count(i), 0);
     dbgOut(`已載入${label}：種子 ${log.seed}，${log.segments.length} 段，共 ${total} 個轉移。按「單步」或「全部」。`);
     window.__tp.replayer = rp;
@@ -2109,16 +2104,6 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     return all;
   }
   $("dbgExport").addEventListener("click", exportLog);
-  $("dbgSummary").addEventListener("click", () => summary());
-  $("dbgCurrent").addEventListener("click", () => { const lg = currentLog(); if (lg) loadReplay(JSON.parse(JSON.stringify(lg)), "本局記錄"); });
-  $("dbgLoad").addEventListener("click", () => $("dbgFile").click());
-  $("dbgFile").addEventListener("change", (e) => {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    f.text().then((txt) => { let lg; try { lg = JSON.parse(txt); } catch (err) { dbgOut("不是 JSON 檔。"); return; } loadReplay(lg, `「${f.name}」`); });
-    e.target.value = "";
-  });
-  $("dbgStep").addEventListener("click", stepReplay);
-  $("dbgAll").addEventListener("click", runAllReplay);
 
   // ------------------------------------------------------------ 繪製
   const rings = [];          // 合併特效
