@@ -260,7 +260,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             <legend>新局設定（按「開新局」時套用）</legend>
             <div class="fields ng">
               <label for="ngMap">地圖</label><select id="ngMap"><option value="1">本島 19 塊</option><option value="2">含澎湖 20 塊</option></select>
-              <span class="lb"><label for="ngLink">澎湖規則</label><button type="button" class="info" data-help="rules:h-penghu" aria-label="澎湖規則說明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.7" r="1.15" fill="currentColor"/><path d="M8 7.3v4.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span><select id="ngLink"><option value="A">只連一次</option><option value="B">可當橋梁</option></select>
+              <span class="lb"><label for="ngLink">澎湖規則</label><button type="button" class="info" data-help="rules:h-penghu" aria-label="澎湖規則說明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.7" r="1.15" fill="currentColor"/><path d="M8 7.3v4.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span><select id="ngLink"><option value="A">只連一次</option><option value="B">不限次數</option></select>
               <span class="lb"><label for="ngShake">拍打模式</label><button type="button" class="info" data-help="screen:h-shake" aria-label="拍打模式說明"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.7" r="1.15" fill="currentColor"/><path d="M8 7.3v4.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span><select id="ngShake"><option value="0">自選左右</option><option value="1">左右交替</option></select>
             </div>
           </fieldset>
@@ -318,7 +318,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             <ul>
               <li>在「選單 → 新局設定」選「含澎湖 20 塊」。澎湖只能和西部沿海縣市合併。</li>
               <li><b>只連一次</b>：澎湖連上一個區塊後，再碰到其他縣市不會因為澎湖而合併。</li>
-              <li><b>可當橋梁</b>：連上後，澎湖碰到其他西部沿海縣市還會再合併。</li>
+              <li><b>不限次數</b>：連上後，澎湖碰到其他西部沿海縣市還會再合併。</li>
             </ul>
           </div>
           <div class="hp ops" data-pane="ops" role="tabpanel" hidden>
@@ -470,7 +470,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     angularDamping: 0.08,
     dropGap: 14,             // 手上拼圖旋轉外接圓底部距淘汰線 px
     dropCooldown: 0.45,      // 放下後到下一塊出現的秒數
-    graceSec: 6.0,           // 超線緩衝秒數（累積計算；未超線時以兩倍速回復）
+    graceSec: 10.0,           // 超線緩衝秒數（累積計算；未超線時以兩倍速回復）
     mergeKick: 0.5,          // 合併後的向上小推 m/s
     mergeSpin: 0.4,          // 合併後的隨機角速度 rad/s
     maxSpeed: 12,            // m/s（終端速度；太快會讓大塊在堆疊中被壓進地板）
@@ -1939,7 +1939,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   // 頂欄的模式標示（目前這一局的地圖與澎湖規則）
   function syncModeUi() {
     const P = core.P;
-    $("modeTag").textContent = P.penghu ? `含澎湖 20 塊・澎湖${P.penghuLink === "B" ? "可當橋梁" : "只連一次"}` : "本島 19 塊";
+    $("modeTag").textContent = P.penghu ? `含澎湖 20 塊・澎湖${P.penghuLink === "B" ? "不限次數" : "只連一次"}` : "本島 19 塊";
   }
 
   // ------------------------------------------------------------ 說明視窗（規則／操作／畫面）
