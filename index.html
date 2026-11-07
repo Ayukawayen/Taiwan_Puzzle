@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v15</title>
+<title>台灣拼圖合成 v16</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1597,7 +1597,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  *      一次性提示（看過就不再出現，可在設定重設）；「結束」改為「選單」並暫停遊戲；新局參數（地圖、澎湖規則、拍打模式）
  *      移到選單的「新局設定」，代入目前的值供快速開局；鄰接提示開關移到設定。
  * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。
- * v13：合併上推加入「接觸顛倒」代價（core.js liftAfterMerge）；代價固定（不開放修改）；記錄摘要顯示避開／仍顛倒的次數。 */
+ * v13：合併上推加入「接觸顛倒」代價（core.js liftAfterMerge）；代價固定（不開放修改）；記錄摘要顯示避開／仍顛倒的次數。
+ * v16：下方市名排版——一左一右、文字背對的兩個市名，導引線再近也放在同一排（不再因此掉到第二排）。 */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -2222,14 +2223,17 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   //   三組：最左者先試靠左、最右者先試靠右（放不下才換邊），中間者先試左右兩側中空間較大的一邊
   //   兩組：同上但沒有中間者；一組：在中線以左先試靠左，以右先試靠右
   //   放不下（超出邊界或與已放的文字重疊）就換邊，兩邊都不行再往下一列
-  function layoutGuideLabels(items, minX, maxX, cx, stub, tgap, gap) {
+  //   v16：相鄰兩邊都是導引線（左者朝左、右者朝右，文字背對）時只要求 lineGap，其餘相鄰仍要求 gap
+  function layoutGuideLabels(items, minX, maxX, cx, stub, tgap, gap, lineGap = 0) {
     const order = items.slice().sort((a, b) => a.ax - b.ax), n = order.length, rows = [];
-    const span = (it, side) => { const x0 = it.ax + side * (stub + tgap), x1 = x0 + side * it.w; return { x0, l: Math.min(it.ax, x0, x1), r: Math.max(it.ax, x0, x1) }; };
-    const fits = (it, side, row) => { const p = span(it, side); return p.l >= minX && p.r <= maxX && (rows[row] || []).every(([a, b]) => p.r + gap <= a || p.l >= b + gap); };
+    // la／ra：區間的左緣／右緣是導引線（錨點）
+    const span = (it, side) => { const x0 = it.ax + side * (stub + tgap), x1 = x0 + side * it.w; return { x0, l: Math.min(it.ax, x0, x1), r: Math.max(it.ax, x0, x1), la: side > 0, ra: side < 0 }; };
+    const sep = (a, b) => (a.ra && b.la ? lineGap : gap);   // a 在左、b 在右
+    const fits = (it, side, row) => { const p = span(it, side); return p.l >= minX && p.r <= maxX && (rows[row] || []).every((s) => p.r + sep(p, s) <= s.l || s.r + sep(s, p) <= p.l); };
     const put = (it, pref) => {
       for (let row = 0; row < 4; row++) for (const side of [pref, -pref]) {
         if (!fits(it, side, row)) continue;
-        const p = span(it, side); (rows[row] = rows[row] || []).push([p.l, p.r]);
+        const p = span(it, side); (rows[row] = rows[row] || []).push(p);
         Object.assign(it, { side, row, tx: p.x0 }); return;
       }
       Object.assign(it, { side: pref, row: 0, tx: span(it, pref).x0 });
