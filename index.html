@@ -152,7 +152,18 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
   .resbody { flex-direction: column; align-items: stretch; }
   #resMap { align-self: center; max-width: 100%; height: min(30vh, 260px); }
   header.top .tag { display: none; }
+  /* v15：頂欄多了音效鈕，窄螢幕改成只顯示圖示（依寬度逐步收起文字） */
+  #btnSound > span { display: none; }
+  #btnSound { padding-inline: 8px; }
   .toast { font-size: 12px; top: 6px; }
+}
+@media (max-width: 420px) {
+  #btnHelp > span, #btnSettings > span { display: none; }
+  #btnHelp, #btnSettings { padding-inline: 8px; }
+}
+@media (max-width: 340px) {
+  #btnMenu > span { display: none; }
+  #btnMenu { padding-inline: 8px; }
 }
 /* v11：頂欄圖示鈕、標題旁的說明鈕、體力標示、畫布提示條、說明視窗、新局設定 */
 .hbtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
@@ -202,10 +213,10 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     <h1>台灣拼圖合成</h1>
     <span class="tag" id="modeTag">本島 19 塊</span>
     <span class="spacer"></span>
-    <button id="btnHelp" type="button" class="hbtn" title="說明（?）"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.2a1.9 1.9 0 1 1 2.7 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".95" fill="currentColor"/></svg><span>說明</span></button>
+    <button id="btnHelp" type="button" class="hbtn" aria-label="說明" title="說明（?）"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.2a1.9 1.9 0 1 1 2.7 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".95" fill="currentColor"/></svg><span>說明</span></button>
     <button id="btnSound" type="button" class="hbtn" aria-pressed="true" aria-label="音效開關"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor"/><path id="sndWave" d="M10.4 5.6a3.2 3.2 0 0 1 0 4.8M12.3 3.8a5.8 5.8 0 0 1 0 8.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path id="sndX" d="M10.5 6l3.6 4M14.1 6l-3.6 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none"/></svg><span>音效</span></button>
-    <button id="btnSettings" type="button" class="hbtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><g stroke="currentColor" stroke-width="1.5" style="fill:var(--panel)"><circle cx="5" cy="4" r="1.7"/><circle cx="10.6" cy="8" r="1.7"/><circle cx="6.6" cy="12" r="1.7"/></g></svg><span>設定</span></button>
-    <button id="btnMenu" type="button" class="hbtn" title="選單：暫停（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>選單</span></button>
+    <button id="btnSettings" type="button" class="hbtn" aria-label="設定" title="設定"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><g stroke="currentColor" stroke-width="1.5" style="fill:var(--panel)"><circle cx="5" cy="4" r="1.7"/><circle cx="10.6" cy="8" r="1.7"/><circle cx="6.6" cy="12" r="1.7"/></g></svg><span>設定</span></button>
+    <button id="btnMenu" type="button" class="hbtn" aria-label="選單" title="選單：暫停（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>選單</span></button>
   </header>
   <main class="stage">
     <aside class="hud" id="hud">
