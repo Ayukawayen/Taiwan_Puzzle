@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v16</title>
+<title>台灣拼圖合成 v17</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -153,17 +153,24 @@ label.mode select { font: inherit; font-size: 13px; padding: 4px 6px; border-rad
   #resMap { align-self: center; max-width: 100%; height: min(30vh, 260px); }
   header.top .tag { display: none; }
   /* v15：頂欄多了音效鈕，窄螢幕改成只顯示圖示（依寬度逐步收起文字） */
-  #btnSound > span { display: none; }
-  #btnSound { padding-inline: 8px; }
+  #btnSound > span, #btnUndo > span { display: none; }
+  #btnSound, #btnUndo { padding-inline: 8px; }
   .toast { font-size: 12px; top: 6px; }
 }
-@media (max-width: 420px) {
+/* v17：頂欄多了回復鈕，收起文字的斷點往寬一點移，最窄時再縮小間距 */
+@media (max-width: 520px) {
   #btnHelp > span, #btnSettings > span { display: none; }
   #btnHelp, #btnSettings { padding-inline: 8px; }
 }
-@media (max-width: 340px) {
+@media (max-width: 440px) {
   #btnMenu > span { display: none; }
   #btnMenu { padding-inline: 8px; }
+}
+@media (max-width: 380px) {
+  header.top { gap: 4px; }
+  h1 { font-size: 15px; letter-spacing: 0; }
+  .hbtn { padding-inline: 6px !important; gap: 3px; }
+  .hbtn .badge { min-width: 16px; padding: 0 3px; font-size: 11px; line-height: 16px; }
 }
 /* v11：頂欄圖示鈕、標題旁的說明鈕、體力標示、畫布提示條、說明視窗、新局設定 */
 .hbtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
@@ -180,6 +187,10 @@ button.info svg { width: 12px; height: 12px; }
   box-shadow: 0 4px 14px rgba(0,0,0,.12); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 4; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 @keyframes holdPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); } }
+/* v17：回復鈕。不能回復時仍可點（點了會說明原因），只是變淡 */
+.hbtn .badge { font-family: var(--font-num); font-size: 12px; font-weight: 500; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); text-align: center; line-height: 18px; }
+button.off { opacity: .45; }
+button.off:hover { border-color: var(--rule); }
 button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-out infinite; }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); position: sticky; top: -18px; background: var(--panel); z-index: 1; }
 .tabs button { flex: 1; border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; min-height: 36px; color: var(--ink-soft); }
@@ -216,6 +227,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     <button id="btnHelp" type="button" class="hbtn" aria-label="說明" title="說明（?）"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.2a1.9 1.9 0 1 1 2.7 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".95" fill="currentColor"/></svg><span>說明</span></button>
     <button id="btnSound" type="button" class="hbtn" aria-pressed="true" aria-label="音效開關"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor"/><path id="sndWave" d="M10.4 5.6a3.2 3.2 0 0 1 0 4.8M12.3 3.8a5.8 5.8 0 0 1 0 8.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path id="sndX" d="M10.5 6l3.6 4M14.1 6l-3.6 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none"/></svg><span>音效</span></button>
     <button id="btnSettings" type="button" class="hbtn" aria-label="設定" title="設定"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><g stroke="currentColor" stroke-width="1.5" style="fill:var(--panel)"><circle cx="5" cy="4" r="1.7"/><circle cx="10.6" cy="8" r="1.7"/><circle cx="6.6" cy="12" r="1.7"/></g></svg><span>設定</span></button>
+    <button id="btnUndo" type="button" class="hbtn off" aria-disabled="true" aria-label="回復最後一次放下" title="回復最後一次放下（Ctrl+Z）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 3.2 2.6 6.2l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6.2h6.4a3.6 3.6 0 0 1 0 7.2H6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>回復</span><b id="undoN" class="badge">3</b></button>
     <button id="btnMenu" type="button" class="hbtn" aria-label="選單" title="選單：暫停（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>選單</span></button>
   </header>
   <main class="stage">
@@ -314,6 +326,14 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
               <li><b>保留區</b>：先把手上這塊存起來，換下一塊上手，之後再取出。只有 1 格，最後一塊不能保留。</li>
               <li><b>拍打機台</b>：讓所有區塊一起往左上或往右上彈一下，每次拍打要耗費體力，體力會隨時間回復。</li>
             </ul>
+            <h4 id="h-undo">回復</h4>
+            <ul>
+              <li>放下之後反悔，可以<b>回到最後一次放下之前</b>：那塊拼圖回到手上，盤面恢復原狀。每局一開始有 <span data-p="undoStart">3</span> 次。</li>
+              <li>放下後<b>拍打過</b>就不能回復；只能回復最後一次放下。放下後的保留、取出會一起倒回。</li>
+              <li>被淘汰後也可以回復；拼完台灣後不能回復。</li>
+              <li>計時不會倒回；合併次數會倒回。</li>
+              <li>合併次數每到 <span data-p="undoBonusEvery">5</span> 的倍數，回復次數 +1（同一個次數只給一次）。</li>
+            </ul>
             <h4 id="h-penghu">澎湖（選用地圖）</h4>
             <ul>
               <li>在「選單 → 新局設定」選「含澎湖 20 塊」。澎湖只能和西部沿海縣市合併。</li>
@@ -326,16 +346,19 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
               <li>手指拖曳：移動拼圖</li>
               <li>放開：放下</li>
               <li>拖到紅色淘汰線以上再放開：取消，不放下</li>
-              <li>保留、拍打：按上方的按鈕</li>
+              <li>保留、拍打：按側欄的按鈕</li>
+              <li>回復：按頂欄的回復鈕</li>
             </ul></section>
             <section data-dev="mouse"><h4>滑鼠</h4><ul>
               <li>移動：選擇位置</li>
               <li>點一下：放下（滑鼠沒有取消動作）</li>
+              <li>放錯了：按頂欄的回復鈕</li>
             </ul></section>
             <section data-dev="kbd"><h4>鍵盤</h4><dl class="keymap">
               <dt><kbd>←</kbd><kbd>→</kbd> 或 <kbd>A</kbd><kbd>D</kbd></dt><dd>移動</dd>
               <dt><kbd>空白</kbd> 或 <kbd>Enter</kbd></dt><dd>放下</dd>
               <dt><kbd>H</kbd></dt><dd>保留／取出</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Z</kbd> 或 <kbd>⌘</kbd><kbd>Z</kbd></dt><dd>回復最後一次放下</dd>
               <dt><kbd>Z</kbd><kbd>X</kbd></dt><dd>向左拍／向右拍（自選左右模式）</dd>
               <dt><kbd>S</kbd></dt><dd>拍打（左右交替模式依序左右；自選模式沿用上一次的方向）</dd>
               <dt><kbd>Esc</kbd></dt><dd>打開或關閉選單（暫停）</dd>
@@ -353,6 +376,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
               <dt id="h-over">淘汰線倒數</dt><dd>超線時紅線閃爍，並顯示剩下的秒數（累積計算，見「規則」）。</dd>
               <dt id="h-hint">鄰接提示</dt><dd>在「設定」開啟後，場上與手上拼圖相鄰、碰到就會合併的縣市會加上醒目外框。</dd>
               <dt id="h-guide">市名導引線</dt><dd>基隆市、新竹市、嘉義市面積小，名稱用綠色導引線標在容器上方或下方。</dd>
+              <dt id="h-undoBtn">回復鈕</dt><dd>頂欄的 ↶，數字是剩下的回復次數。不能回復時按鈕變淡，按下會說明原因。被淘汰時也可以按它回復。</dd>
               <dt id="h-menu">選單</dt><dd>暫停遊戲，查看目前盤面的區塊地圖；也可以調整新局設定後開新局。</dd>
             </dl>
           </div>
@@ -450,6 +474,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  * 確定性重放（V8；記錄格式 v2 自 v12 起）
  *   canonical 開啟時，每個行動（放下、拍打）被接受前先以存檔快照重建世界，亂數也由快照內容決定，行動記錄可逐位元重放。
  *   保留／取出不影響物理與亂數，記成不附快照的輕量項目；重放時在對應步數套用即可重現。
+ *
+ * 回復（v17）
+ *   只能回復「最後一次放下」：回到該次放下前一瞬間的快照（undoSnap，由 beginAction 取得）。
+ *   拍打、勝利會讓它失效；保留／取出不會（回復時連同放下後的保留／取出一起倒回）。淘汰後仍可回復。
+ *   還原後計時與體力沿用目前的值（時間一直在走），合併次數、超線累積等盤面相關狀態照快照倒回。
+ *   次數 st.undo（初始 undoStart）；合併次數每到 5 的倍數 +1，同一個數字一局只發一次（st.undoClaimed）。
+ *   次數與已領清單不隨回復倒回，所以總量不會憑空增加。每次回復在行動記錄中開一個新段落（reason "undo"）。
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -496,6 +527,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     liftContactMax: 2,       // 合併上推（v13）：接觸顛倒代價最多計幾個縣市對（避免接觸多的大區塊被過度懲罰）
     liftContactMinNy: 0.5,   // 合併上推（v13）：接觸法向量垂直分量 ≥ 此值才算上下接觸（約 60° 以內）；更斜的視為並排
     liftContactMaxRot: 30,   // 合併上推（v13）：舊區塊在合併時被轉超過此角度（度）→ 它的接觸不採用（幾何已改變）
+    undoStart: 3,            // 每局初始回復次數（v17）
+    undoBonusEvery: 5,       // 合併次數每到此數的倍數，回復次數 +1（同一個數字一局只發一次）
     stuckSec: 7,             // 全部放下且靜止多久後標記卡關（st.stuck；v10 起不提示，只保留狀態以維持存檔相容）
     dt: 1 / 240,             // 固定模擬步長（秒）
     velIter: 10,             // Box2D 速度迭代次數
@@ -544,6 +577,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
     // ---------------------------------------------------------- 狀態
     let world = null, wallBody = null, impacts = [];
+    let undoSnap = null, undoGone = null;   // v17：最後一次放下前的快照；undoGone：快照失效的原因（"shake"／"used"）
     let groups = new Map();         // gid → {id, members, pivot:[x,y], body, landed}
     let groupOf = [];               // county → gid
     let nextGid = 1;
@@ -611,6 +645,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         st = Object.assign(keepSt, st);          // 外部（畫面、測試）持有的 state 物件維持同一個
         tweens = keepT; events = keepE; acc = keepAcc;
       }
+      return snap;
     }
     function exportLog() {
       if (!rec) return null;
@@ -643,6 +678,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       tweens = new Array(N).fill(null);
       events = []; acc = 0; simSteps = 0;
       liftStats = newLiftStats();
+      undoSnap = null; undoGone = null;
       buildWalls();
       const rng = mulberry32(seed >>> 0);
       const order = [...Array(N).keys()];
@@ -653,6 +689,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         held: null, heldX: P.containerW / 2, heldAngle: 0, cooldown: 0.2,
         status: "playing", time: 0, stamina: P.shakeMax, shakeCd: 0,
         grace: 0, over: false, stillT: 0, stuck: false, shakes: 0, merges: 0, wonAt: null,
+        undo: P.undoStart, undoClaimed: [], undos: 0,   // v17：剩餘回復次數、已領的合併獎勵（合併次數）、已回復次數
       };   // grace：超線累積秒數；stillT／stuck：卡關偵測（只記狀態）
     }
 
@@ -762,7 +799,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
     function drop() {
       if (st.status !== "playing" || st.held == null) return false;
-      beginAction("drop", { county: st.held, x: st.heldX, a: st.heldAngle });
+      const snap = beginAction("drop", { county: st.held, x: st.heldX, a: st.heldAngle });
+      undoSnap = snap; undoGone = null;          // v17：只有最後一次放下可以回復
       const hp = heldPose();
       const g = makeGroup([hp.county], [hp.x, hp.y], hp.a);
       g.body.setLinearVelocity(Vec2(0, 0)); g.body.setAngularVelocity(0);
@@ -1256,12 +1294,15 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
       for (const m of members) tweens[m] = { x: fromPose[m].x, y: fromPose[m].y, a: fromPose[m].a, t: 0 };
       st.merges++;
+      const bonus = P.undoBonusEvery > 0 && st.merges % P.undoBonusEvery === 0 && st.undoClaimed.indexOf(st.merges) < 0;
+      if (bonus) { st.undoClaimed.push(st.merges); st.undo++; }
       // 澎湖連線（畫面以虛線連接澎湖與它合併的縣市）
       if (penghuIdx >= 0 && (cA === penghuIdx || cB === penghuIdx)) st.links.push([penghuIdx, cA === penghuIdx ? cB : cA]);
       const cc = ng.body.getWorldCenter();
       emit({ type: "merge", a: cA, b: cB, size: members.length, gid: ng.id, pos: [cc.x / S, cc.y / S], lift: lift.lift, maxd: lift.maxd, carried: lift.carried.length, cycle: lift.cycle, gaps: lift.gaps, swaps, pen: P.debugPen ? maxPenetration() : undefined, penPairs: P.debugPen ? penPairs(3) : undefined });
+      if (bonus) emit({ type: "undoBonus", n: st.merges, left: st.undo });
       if (members.length === N && st.status === "playing") {
-        st.status = "won"; st.wonAt = st.time;
+        st.status = "won"; st.wonAt = st.time; undoSnap = null;
         emit({ type: "win", time: st.time });
       }
       return ng;
@@ -1376,7 +1417,9 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     function shake(dir) {
       if (!canShake()) return false;
       const d = P.shakeAlt ? nextShakeDir() : (dir < 0 ? -1 : 1);
+      const hadUndo = !!undoSnap;                // beginAction 會重建世界（清掉回復狀態），先記下
       beginAction("shake", { dir: d });
+      undoSnap = null; undoGone = hadUndo ? "shake" : null;   // v17：拍打後不能回復
       st.stamina -= P.shakeCost; st.shakeCd = P.shakeCooldown; st.shakes++;
       const rnd = st.rng || Math.random;
       for (const g of groups.values()) {
@@ -1412,7 +1455,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
     // ---------------------------------------------------------- 存檔
     const SAVE_VERSION = 6;   // V9：拿掉接觸上下關係（V8＝5：加 shakeCd、stillT、stuck；還原時亂數種子由快照內容決定）。讀取時也接受 5（忽略 rel）。v10 存檔格式不變
-    function serialize() {
+    // full＝true：存檔用，另外附上回復快照（行動記錄與回復快照本身不含，避免層層巢狀）
+    function serialize(full) {
       const gs = [];
       for (const g of groups.values()) {
         const p = g.body.getPosition(), v = g.body.getLinearVelocity();
@@ -1425,6 +1469,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         cooldown: st.cooldown, wonAt: st.wonAt, groups: gs,
         penghu: !!P.penghu, penghuLink: P.penghuLink, links: st.links,
         shakeCd: st.shakeCd, stillT: st.stillT, stuck: st.stuck,
+        undo: st.undo, undoClaimed: st.undoClaimed.slice(), undos: st.undos,
+        undoSnap: full && undoSnap ? undoSnap : undefined,
       };
     }
     // 還原後的亂數種子：只由快照內容決定（同一個快照永遠得到同一串亂數）
@@ -1432,6 +1478,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     function restore(sv, prevLog) {
       const copy = JSON.parse(JSON.stringify(sv));
       if (!restoreState(sv)) return false;
+      undoSnap = sv.undoSnap && typeof sv.undoSnap === "object" ? sv.undoSnap : null;
+      delete copy.undoSnap;
       recStart("restore", prevLog, copy);      // 段落起點＝讀入的存檔本身（重放器還原它，就與現場相同）
       return true;
     }
@@ -1452,6 +1500,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       reset(sv.seed);
       st.rng = reseed(sv);
       st.shakeCd = sv.shakeCd || 0; st.stillT = sv.stillT || 0; st.stuck = !!sv.stuck;
+      st.undo = sv.undo == null ? P.undoStart : sv.undo; st.undoClaimed = Array.isArray(sv.undoClaimed) ? sv.undoClaimed.slice() : []; st.undos = sv.undos || 0;
       P.shakeAlt = !!sv.shakeAlt;
       st.queue = sv.queue.slice(); st.slot = sv.slot == null ? null : sv.slot;
       st.previewAt = (sv.time || 0) + (sv.previewWait || 0);
@@ -1467,6 +1516,43 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       return true;
     }
 
+    // ---------------------------------------------------------- 回復（v17）
+    // 不能回復的原因：""＝可以；won 已完成；count 次數用完；shake 放下後拍打過；used 已回復過；none 還沒有放下
+    function undoBlocked() {
+      if (!st) return "none";
+      if (st.status === "won") return "won";
+      if (!undoSnap) return undoGone || "none";
+      if (st.undo <= 0) return "count";
+      if (st.status !== "playing" && st.status !== "lost") return "none";
+      return "";
+    }
+    function canUndo() { return undoBlocked() === ""; }
+    function undoInfo() { return { left: st ? st.undo : 0, county: undoSnap ? undoSnap.held : null, blocked: undoBlocked() }; }
+    function undo() {
+      if (!canUndo()) return false;
+      const snap = undoSnap, county = snap.held;
+      // 目前留在畫面上的區塊：從現在的姿態滑回快照姿態（純顯示）
+      const from = [];
+      for (let m = 0; m < N; m++) { const p = countyPose(m); if (p) from[m] = p; }
+      const keep = { time: st.time, stamina: st.stamina, undo: st.undo - 1, claimed: st.undoClaimed.slice(), undos: (st.undos || 0) + 1 };
+      // 舊段落補上結束快照，重放器可以驗證被回復的那次放下
+      if (cur) cur.end = { d: sinceAct, events: cur.tail.events, time: st.time, snap: JSON.parse(JSON.stringify(serialize())) };
+      // 目標快照：放下前的盤面，但計時、體力沿用目前的值（時間一直在走）；次數與已領獎勵不倒回。
+      // 預覽延遲在快照裡是相對值，換了時間仍然正確。世界與記錄段落都以這同一份快照為準，重放才能逐位元相同
+      const target = JSON.parse(JSON.stringify(snap));
+      Object.assign(target, { time: keep.time, stamina: Math.min(P.shakeMax, keep.stamina), undo: keep.undo, undoClaimed: keep.claimed, undos: keep.undos });
+      const keepE = events, keepAcc = acc, keepSt = st;
+      if (!restoreState(JSON.parse(JSON.stringify(target)))) return false;
+      for (const k of Object.keys(keepSt)) if (!(k in st)) delete keepSt[k];
+      st = Object.assign(keepSt, st);
+      events = keepE; acc = keepAcc;
+      undoSnap = null; undoGone = "used";
+      for (let m = 0; m < N; m++) if (from[m] && groupOf[m] >= 0) tweens[m] = { x: from[m].x, y: from[m].y, a: from[m].a, t: 0 };
+      recStart("undo", rec, target);
+      emit({ type: "undo", county, left: st.undo });
+      return true;
+    }
+
     // ---------------------------------------------------------- 對外
     function newGame(seed) {
       reset(seed == null ? (Math.random() * 4294967296) >>> 0 : seed);
@@ -1478,7 +1564,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
     const api = {
       N, pieces, adj, idxByName, P, penghuIdx,
-      newGame, restore, serialize, update, stepOnce, drop, shake, canShake,
+      newGame, restore, serialize, update, stepOnce, drop, shake, canShake, undo, canUndo, undoBlocked, undoInfo,
       setHeldX, heldPose, nextPreview, unplaced, dropPreview, previewVisible, fallTime, hold, retrieve, canHold, canRetrieve, nextShakeDir, maxPenetration, penPairs, deepIn, countyPose, groupsInfo, drainEvents, drainImpacts, setParams,
       groupAABB: (gid) => groupAABB(groups.get(gid)),
       exportLog, get log() { return rec; }, restoreState,
@@ -1496,7 +1582,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   // 讀行動記錄，在相鄰兩個「比對點」之間重放，並與後一個比對點的快照比對。只記錄差異，不診斷、不修改。
   // 比對點：段落開頭（snap0；前段被截斷時改為第一個有快照的行動）、每個放下／拍打、匯出當下（end）。
   // 轉移 j：還原比對點 j 的快照 → 套用該行動（段落開頭則無）→ 依序跑步數並套用中間的保留／取出 → 跑到比對點 j+1，比對其快照。
-  const IGNORE = new Set(["heldX", "heldAngle"]);     // 游標位置與手上拼圖的自轉角度隨畫面時間變化，不是模擬結果
+  const IGNORE = new Set(["heldX", "heldAngle"]);
+  const ADDED_V17 = new Set(["undo", "undoClaimed", "undos", "undoSnap"]);   // v16 以前的記錄沒有這些欄位：記錄缺少時不比對     // 游標位置與手上拼圖的自轉角度隨畫面時間變化，不是模擬結果
   function compareSnap(got, want) {
     const diffs = [];
     const walk = (a, b, path) => {
@@ -1505,7 +1592,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       if (a === null || b === null || typeof a !== "object" || typeof b !== "object") { if (a !== b) diffs.push({ path, got: a, want: b }); return; }
       if (Array.isArray(a) !== Array.isArray(b)) { diffs.push({ path, got: "型別不同", want: "" }); return; }
       const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-      for (const k of keys) { if (IGNORE.has(k) && path === "") continue; walk(a[k], b[k], path ? path + "." + k : k); }
+      for (const k of keys) { if (IGNORE.has(k) && path === "") continue; if (path === "" && ADDED_V17.has(k) && !(k in b)) continue; walk(a[k], b[k], path ? path + "." + k : k); }
     };
     walk(got, want, "");
     let maxPos = 0;
@@ -1598,7 +1685,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  *      移到選單的「新局設定」，代入目前的值供快速開局；鄰接提示開關移到設定。
  * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。
  * v13：合併上推加入「接觸顛倒」代價（core.js liftAfterMerge）；代價固定（不開放修改）；記錄摘要顯示避開／仍顛倒的次數。
- * v16：下方市名排版——一左一右、文字背對的兩個市名，導引線再近也放在同一排（不再因此掉到第二排）。 */
+ * v16：下方市名排版——一左一右、文字背對的兩個市名，導引線再近也放在同一排（不再因此掉到第二排）。
+ * v17：回復最後一次放下（頂欄按鈕、Ctrl+Z／⌘Z）；次數有限，合併次數每到 5 的倍數 +1。 */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1627,6 +1715,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     ["shakeRegen", "體力回復 /秒", 1, 60, 1],
     ["shakeAlt", "拍打模式 (0 自選左右 / 1 左右交替)", 0, 1, 1],
     ["edgeW", "外框線寬（外側）px", 1, 5, 0.1],
+    ["undoStart", "每局初始回復次數", 0, 20, 1],
   ];
   const DEFAULTS = window.TPCore.DEFAULTS;
   let userParams = Object.assign({}, store.get(PARAM_KEY) || {});
@@ -1721,7 +1810,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   }
   function saveNow() {
     if (!core) return;
-    const s = core.serialize();
+    const s = core.serialize(true);   // v17：存檔附上回復快照，重新整理後仍可回復
     store.set(SAVE_KEY, s);
     saveLog();
   }
@@ -1803,6 +1892,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     syncNg();
     $("endClose").textContent = playing ? "繼續遊戲" : "看盤面";
     $("endClose").classList.toggle("primary", playing); $("endAgain").classList.toggle("primary", !playing);
+    if (st.status === "lost" && core.canUndo()) { const ui = core.undoInfo(); $("endBody").textContent += ` 可以用頂欄的回復鈕回復最後一次放下（${shapes.pieces[ui.county].name}），剩 ${ui.left} 次。`; }
     drawResultMap(gs);
     showOverlay("ovEnd");
   }
@@ -1892,6 +1982,43 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     else if (core.canRetrieve()) { const had = core.state.held != null; core.retrieve(); if (had && tipOnce("retrieve")) setMsg("已取出；原本手上那塊排回「下一塊」。"); slotHint = false; saveNow(); }
     else if (core.state.status === "playing" && core.state.held != null) { SFX.deny(); setMsg("最後一塊不能保留。"); }
   }
+  // v17：回復最後一次放下
+  const UNDO_WHY = {
+    won: "已經拼完了，不能回復。",
+    count: "回復次數用完了。合併次數每到 5 的倍數，會再給 1 次。",
+    shake: "放下後拍打過，不能回復。",
+    used: "只能回復最後一次放下，這一次已經回復過了。",
+    none: "還沒有可以回復的放下。",
+  };
+  const undoWhy = (b) => (b === "count" ? `回復次數用完了。合併次數每到 ${core.P.undoBonusEvery} 的倍數，會再給 1 次。` : UNDO_WHY[b] || UNDO_WHY.none);
+  function doUndo() {
+    if (!core) return;
+    if (!$("ovSettings").hidden || !$("ovHelp").hidden || !$("ovConfirm").hidden) return;   // 選單（ovEnd）以外的視窗打開時不動作
+    const b = core.undoBlocked();
+    if (b) { SFX.deny(); setMsg(undoWhy(b)); return; }
+    const county = core.undoInfo().county;
+    if (!core.undo()) { SFX.deny(); return; }
+    hideOverlay("ovEnd");
+    rings.length = 0; shakeAmp = 0; sfxCol.fresh = -1; pressed = false; cancelZone = false;
+    lastNextKey = ""; lastSlotKey = "x"; slotHint = false;
+    SFX.undo();
+    const st = core.state, g = st.grace > 0.05 ? `　超線累積 ${st.grace.toFixed(1)}／${core.P.graceSec} 秒。` : "";
+    setMsg(`已回復：${shapes.pieces[county].name} 回到手上，剩 ${st.undo} 次回復。${g}`);
+    saveNow();
+  }
+  function syncUndoUi() {
+    const ui = core.undoInfo(), b = ui.blocked, el = $("btnUndo");
+    $("undoN").textContent = String(ui.left);
+    el.classList.toggle("off", !!b); el.setAttribute("aria-disabled", String(!!b));
+    el.title = b ? `回復：${undoWhy(b)}` : `回復 ${shapes.pieces[ui.county].name} 的放下（Ctrl+Z），剩 ${ui.left} 次`;
+    el.setAttribute("aria-label", `回復最後一次放下，剩 ${ui.left} 次`);
+  }
+  $("btnUndo").addEventListener("click", (e) => { doUndo(); e.currentTarget.blur(); });
+  window.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.repeat || (e.key !== "z" && e.key !== "Z" && e.code !== "KeyZ")) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;   // 輸入框保留原本的復原
+    e.preventDefault(); doUndo();
+  });
   const OVERLAYS = ["ovEnd", "ovSettings", "ovHelp", "ovConfirm"];   // 由下而上（與 DOM 順序相同，後者蓋在前者上面）
   const anyOverlayOpen = () => OVERLAYS.some((id) => !$(id).hidden);
   let lastDir = 0;   // 上次自選的拍打方向；自選模式下 S 鍵沿用它（沒有則向右）
@@ -2060,6 +2187,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const evText = (evs) => (evs || []).map((e) => {
       if (e.type === "merge") return `${nm(e.a)}＋${nm(e.b)} 合併 → ${e.size} 縣市（上推 ${Math.round(e.lift || 0)}px${e.carried ? `，帶動 ${e.carried} 區塊` : ""}${e.gaps && e.gaps.pocket ? `，凹口容身 ${e.gaps.pocket}` : ""}${e.gaps && e.gaps.fail ? `，無解 ${e.gaps.fail} 對` : ""}${e.gaps && e.gaps.avoid ? `，避開接觸顛倒 ${e.gaps.avoid} 次` : ""}${e.gaps && e.gaps.cross ? `，仍顛倒 ${e.gaps.cross} 對` : ""}）`;
       if (e.type === "win") return "★ 完成";
+      if (e.type === "undoBonus") return `回復次數 +1（合併第 ${e.n} 次，剩 ${e.left} 次）`;
+      if (e.type === "undo") return `↶ 回復：${nm(e.county)} 回到手上（剩 ${e.left} 次）`;
       if (e.type === "lose") return "✗ 超過淘汰線，遊戲結束";
       if (e.type === "stuck") return "卡關提示";   // 只出現在 v9 的記錄檔；v10 不再發出 stuck 事件
       return null;
@@ -2071,7 +2200,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const ACT = { drop: "放下", hold: "保留", retrieve: "取出" };
     log.segments.forEach((sg, si) => {
       const n = sg.actions.length, nLight = sg.actions.filter((a) => a.type === "hold" || a.type === "retrieve").length;
-      console.groupCollapsed(`段落 ${si + 1}：${sg.reason === "new" ? "新局" : "由存檔還原"}，遊戲時間 ${fmtT(sg.time)} 起，${n} 筆（放下／拍打 ${n - nLight}、保留／取出 ${nLight}）${sg.trimmed ? "（前段已截斷）" : ""}`);
+      console.groupCollapsed(`段落 ${si + 1}：${sg.reason === "new" ? "新局" : sg.reason === "undo" ? "回復最後一次放下" : "由存檔還原"}，遊戲時間 ${fmtT(sg.time)} 起，${n} 筆（放下／拍打 ${n - nLight}、保留／取出 ${nLight}）${sg.trimmed ? "（前段已截斷）" : ""}`);
       const first = n ? sg.actions[0] : sg.end;
       if (first && evText(first.events)) console.log(`段落開頭到第一筆之間：${evText(first.events)}`);
       // 某筆之後的下一個快照（下一個放下／拍打，或匯出當下）：用來顯示「之後的區塊數」
@@ -2442,6 +2571,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         if (e.type === "merge") {
           rings.push({ x: e.pos[0], y: e.pos[1], t0: ts, size: e.size });
           setMsg(`${core.pieces[e.a].name}＋${core.pieces[e.b].name} 合併・${e.size} 縣市`);
+        } else if (e.type === "undoBonus") {
+          setMsg(`合併第 ${e.n} 次！回復次數 +1（剩 ${e.left} 次）`);
         }
       }
       sfxImpacts(ts); sfxDanger(dt, pz);
@@ -2475,6 +2606,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
         const ret = core.canRetrieve();
         $("holdLabel").textContent = ret ? "取出" : "保留";
         $("btnHold").disabled = !(ret || core.canHold());
+        syncUndoUi();
         const slotLeft = st.status === "playing" && st.held == null && !st.queue.length && st.slot != null;   // 只剩保留區那一塊
         $("btnHold").classList.toggle("pulse", slotLeft);
         if (slotLeft && !slotHint) { slotHint = true; setMsg("拼圖都放完了，保留區還有一塊，按「取出」。", 5000); }
@@ -2676,7 +2808,18 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     const unlock = () => ensure();
     window.addEventListener("pointerdown", unlock, true);
     window.addEventListener("keydown", unlock, true);
-    return { pref, drop, hold, retrieve, deny, shake, knock, merge, heartbeat, win, lose, setOn, setVol, now: () => (ac ? ac.currentTime : 0) };
+    // v17：回復——由高往低的倒帶掃頻＋輕敲；獎勵——兩個上行的木琴音
+    function undo() {
+      if (!live()) return;
+      noise({ f: 3200, f2: 300, q: 1.6, a: 0.02, d: 0.22, g: 0.3 });
+      tone({ type: "triangle", f: 880, f2: 330, a: 0.01, d: 0.2, g: 0.12 });
+      click(0.24);
+    }
+    function bonus() {
+      if (!live()) return;
+      mallet(noteF(12), 0.35, 0.2, 0); mallet(noteF(14), 0.47, 0.22, 0);
+    }
+    return { pref, drop, hold, retrieve, deny, shake, knock, merge, heartbeat, win, lose, undo, bonus, setOn, setVol, now: () => (ac ? ac.currentTime : 0) };
   })();
 
   // 物理碰撞 → 敲擊聲：每區塊冷卻 0.09 秒、每格畫面最多 3 聲；剛放下那塊的第一次落地加重
@@ -2717,6 +2860,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       SFX.merge({ step: e.size - 2, pan: (e.pos[0] / P.containerW) * 1.4 - 0.7, delay: P.tweenSec * 0.85, inlay,
         metro: na.category === "直轄市" || nb.category === "直轄市", lift: e.lift || 0 });
     }
+    else if (e.type === "undoBonus") SFX.bonus();
     else if (e.type === "win") SFX.win(core.N);
     else if (e.type === "lose") SFX.lose();
   }
