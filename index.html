@@ -527,7 +527,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     liftContactMax: 2,       // 合併上推（v13）：接觸顛倒代價最多計幾個縣市對（避免接觸多的大區塊被過度懲罰）
     liftContactMinNy: 0.5,   // 合併上推（v13）：接觸法向量垂直分量 ≥ 此值才算上下接觸（約 60° 以內）；更斜的視為並排
     liftContactMaxRot: 30,   // 合併上推（v13）：舊區塊在合併時被轉超過此角度（度）→ 它的接觸不採用（幾何已改變）
-    undoStart: 3,            // 每局初始復原次數（v17）
+    undoStart: 1,            // 每局初始復原次數（v17）
     undoBonusEvery: 5,       // 合併次數每到此數的倍數，復原次數 +1（同一個數字一局只發一次）
     stuckSec: 7,             // 全部放下且靜止多久後標記卡關（st.stuck；v10 起不提示，只保留狀態以維持存檔相容）
     dt: 1 / 240,             // 固定模擬步長（秒）
