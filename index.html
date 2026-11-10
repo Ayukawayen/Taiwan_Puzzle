@@ -328,11 +328,11 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             </ul>
             <h4 id="h-undo">復原</h4>
             <ul>
-              <li>放下之後反悔，可以<b>回到最後一次放下之前</b>：那塊拼圖回到手上，盤面恢復原狀。每局一開始有 <span data-p="undoStart">3</span> 次。</li>
+              <li>放下之後反悔，可以<b>回到最後一次放下之前</b>：那塊拼圖回到手上，盤面恢復原狀。</li>
               <li>放下後<b>拍打過</b>就不能復原；只能復原最後一次放下。放下後的保留、取出會一起倒回。</li>
               <li>被淘汰後也可以復原；拼完台灣後不能復原。</li>
               <li>計時不會倒回；合併次數會倒回。</li>
-              <li>合併次數每到 <span data-p="undoBonusEvery">5</span> 的倍數，復原次數 +1（同一個次數只給一次）。</li>
+              <li>合併次數每到達一定數量時，復原次數 +1（同一個次數只能領一次）。</li>
             </ul>
             <h4 id="h-penghu">澎湖（選用地圖）</h4>
             <ul>
@@ -1700,7 +1700,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
   // 調參視窗欄位：[參數名, 標籤, 最小, 最大, 步進]。速度類單位為 m/s（1 m = 100 px）；地圖、澎湖規則、拍打模式也可在選單的「新局設定」更改
   const SETTINGS = [
-    ["containerW", "容器寬度 px", 400, 1600, 10],
+    ["containerW", "容器寬度 px", 500, 1600, 10],
     ["deadlineH", "淘汰線高度 px", 900, 2000, 10],
     ["gravity", "重力 px/s²", 600, 4000, 100],
     ["friction", "摩擦力", 0, 1.5, 0.05],
