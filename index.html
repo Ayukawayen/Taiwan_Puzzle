@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>台灣拼圖合成 v17</title>
+<title>台灣拼圖合成 v18</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -227,7 +227,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     <button id="btnHelp" type="button" class="hbtn" aria-label="說明" title="說明（?）"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.2a1.9 1.9 0 1 1 2.7 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r=".95" fill="currentColor"/></svg><span>說明</span></button>
     <button id="btnSound" type="button" class="hbtn" aria-pressed="true" aria-label="音效開關"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor"/><path id="sndWave" d="M10.4 5.6a3.2 3.2 0 0 1 0 4.8M12.3 3.8a5.8 5.8 0 0 1 0 8.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path id="sndX" d="M10.5 6l3.6 4M14.1 6l-3.6 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="display:none"/></svg><span>音效</span></button>
     <button id="btnSettings" type="button" class="hbtn" aria-label="設定" title="設定"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><g stroke="currentColor" stroke-width="1.5" style="fill:var(--panel)"><circle cx="5" cy="4" r="1.7"/><circle cx="10.6" cy="8" r="1.7"/><circle cx="6.6" cy="12" r="1.7"/></g></svg><span>設定</span></button>
-    <button id="btnUndo" type="button" class="hbtn off" aria-disabled="true" aria-label="復原最後一次放下" title="復原最後一次放下（Ctrl+Z）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 3.2 2.6 6.2l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6.2h6.4a3.6 3.6 0 0 1 0 7.2H6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>復原</span><b id="undoN" class="badge">3</b></button>
+    <button id="btnUndo" type="button" class="hbtn off" aria-disabled="true" aria-label="復原最後一次放下" title="復原最後一次放下（Ctrl+Z）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.6 3.2 2.6 6.2l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6.2h6.4a3.6 3.6 0 0 1 0 7.2H6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>復原</span><b id="undoN" class="badge">1</b></button>
     <button id="btnMenu" type="button" class="hbtn" aria-label="選單" title="選單：暫停（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>選單</span></button>
   </header>
   <main class="stage">
@@ -370,7 +370,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
             <dl class="scr">
               <dt id="h-progress">進度</dt><dd>已放下的塊數／總塊數、場上的區塊數、經過時間。暫停時時間不會走。</dd>
               <dt id="h-next">下一塊</dt><dd>手上這塊放下後，接著出現的縣市。</dd>
-              <dt id="h-hold">保留區</dt><dd>按「保留」把手上這塊存進來，下一塊直接上手。保留區有拼圖時按鈕變成「取出」：保留的那塊回到手上，手上原本那塊排回「下一塊」。最後一塊不能保留；全部放完後若保留區還有一塊，按鈕會閃爍提醒你取出。</dd>
+              <dt id="h-hold">保留區</dt><dd>按「保留」把手上這塊存進來，下一塊直接上手。保留區有拼圖時按鈕變成「取出」：保留的那塊回到手上，手上原本那塊排回「下一塊」。剛放下、下一塊還沒出現時不能取出。最後一塊不能保留；全部放完後若保留區還有一塊，按鈕會閃爍提醒你取出。</dd>
               <dt id="h-shake">拍打機台與體力</dt><dd>綠色條是體力，變紅表示不夠拍。「自選左右」模式有左、右兩顆按鈕；「左右交替」模式只有一顆，依序向左、向右。拍打會把區塊往上彈，盤面很高時小心超線。拍打模式在「選單 → 新局設定」更改。</dd>
               <dt id="h-preview">落點預覽</dt><dd>灰色斜線虛影是「直直落下後第一次碰到東西」的位置，實際落地後還可能滑動或翻滾。上一塊還在掉落時不顯示。</dd>
               <dt id="h-over">淘汰線倒數</dt><dd>超線時紅線閃爍，並顯示剩下的秒數（累積計算，見「規則」）。</dd>
@@ -479,8 +479,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  *   只能復原「最後一次放下」：回到該次放下前一瞬間的快照（undoSnap，由 beginAction 取得）。
  *   拍打、勝利會讓它失效；保留／取出不會（復原時連同放下後的保留／取出一起倒回）。淘汰後仍可復原。
  *   還原後計時與體力沿用目前的值（時間一直在走），合併次數、超線累積等盤面相關狀態照快照倒回。
- *   次數 st.undo（初始 undoStart）；合併次數每到 5 的倍數 +1，同一個數字一局只發一次（st.undoClaimed）。
+ *   次數 st.undo（初始 undoStart，預設 1）；合併次數每到 undoBonusEvery（預設 5）的倍數 +1，同一個數字一局只發一次（st.undoClaimed）。
  *   次數與已領清單不隨復原倒回，所以總量不會憑空增加。每次復原在行動記錄中開一個新段落（reason "undo"）。
+ *
+ * 保留區（v18）
+ *   容量 1。剛放下、下一塊還在冷卻（dropCooldown）時不能取出，避免繞過冷卻連續放下；序列已空時（只剩保留區那塊）隨時可取出。
+ *
+ * 版本沿革見 CHANGELOG.md。
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
@@ -587,7 +592,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     let events = [];
     let acc = 0;
     let simSteps = 0;
-    // 合併上推的累計統計（V9）：merges 合併次數、pairs 處理的重疊對數、pocket 落在凹口／空腔（有上下界）的、
+    // 合併上推的整局累計統計（V9；v18 起只在 newGame 歸零，以快照重建世界時保留）：merges 合併次數、pairs 處理的重疊對數、pocket 落在凹口／空腔（有上下界）的、
     //   alt 改用次近自由區間的、flip 違反原本上下順序的、fail 無解（交給物理引擎）的；
     //   v13：touch 有接觸資料的對、avoid 因接觸顛倒代價而改選的、cross 選中位置仍有接觸顛倒的
     const newLiftStats = () => ({ merges: 0, pairs: 0, pocket: 0, alt: 0, flip: 0, fail: 0, touch: 0, avoid: 0, cross: 0 });
@@ -677,7 +682,6 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       groups = new Map(); groupOf = new Array(N).fill(-1); nextGid = 1;
       tweens = new Array(N).fill(null);
       events = []; acc = 0; simSteps = 0;
-      liftStats = newLiftStats();
       undoSnap = null; undoGone = null;
       buildWalls();
       const rng = mulberry32(seed >>> 0);
@@ -819,7 +823,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       emit({ type: "hold", county: st.slot });
       return true;
     }
-    function canRetrieve() { return st.status === "playing" && st.slot != null; }
+    // 剛放下、下一塊還在冷卻時不能取出（v18）：否則可繞過 dropCooldown 立刻再放；序列已空時照常可取出
+    function canRetrieve() { return st.status === "playing" && st.slot != null && !(st.held == null && st.queue.length > 0); }
     function retrieve() {
       if (!canRetrieve()) return false;
       const back = st.held;
@@ -1454,7 +1459,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     function drainImpacts() { const e = impacts; impacts = []; return e; }
 
     // ---------------------------------------------------------- 存檔
-    const SAVE_VERSION = 6;   // V9：拿掉接觸上下關係（V8＝5：加 shakeCd、stillT、stuck；還原時亂數種子由快照內容決定）。讀取時也接受 5（忽略 rel）。v10 存檔格式不變
+    const SAVE_VERSION = 6;   // V9：拿掉接觸上下關係（V8＝5：加 shakeCd、stillT、stuck；還原時亂數種子由快照內容決定）。讀取時也接受 5（忽略 rel）。v10 起格式不變；v17 加入選用欄位 undo、undoClaimed、undos、undoSnap（缺少時給預設值）
     // full＝true：存檔用，另外附上復原快照（行動記錄與復原快照本身不含，避免層層巢狀）
     function serialize(full) {
       const gs = [];
@@ -1556,6 +1561,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     // ---------------------------------------------------------- 對外
     function newGame(seed) {
       reset(seed == null ? (Math.random() * 4294967296) >>> 0 : seed);
+      liftStats = newLiftStats();
       st.rng = mulberry32((st.seed ^ 0x9E3779B9) >>> 0);
       spawnHeld();
       recStart("new");
@@ -1582,8 +1588,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   // 讀行動記錄，在相鄰兩個「比對點」之間重放，並與後一個比對點的快照比對。只記錄差異，不診斷、不修改。
   // 比對點：段落開頭（snap0；前段被截斷時改為第一個有快照的行動）、每個放下／拍打、匯出當下（end）。
   // 轉移 j：還原比對點 j 的快照 → 套用該行動（段落開頭則無）→ 依序跑步數並套用中間的保留／取出 → 跑到比對點 j+1，比對其快照。
-  const IGNORE = new Set(["heldX", "heldAngle"]);
-  const ADDED_V17 = new Set(["undo", "undoClaimed", "undos", "undoSnap"]);   // v16 以前的記錄沒有這些欄位：記錄缺少時不比對     // 游標位置與手上拼圖的自轉角度隨畫面時間變化，不是模擬結果
+  const IGNORE = new Set(["heldX", "heldAngle"]);                           // 游標位置與手上拼圖的自轉角度隨畫面時間變化，不是模擬結果
+  const ADDED_V17 = new Set(["undo", "undoClaimed", "undos", "undoSnap"]);   // v16 以前的記錄沒有這些欄位：記錄缺少時不比對
   function compareSnap(got, want) {
     const diffs = [];
     const walk = (a, b, path) => {
@@ -1686,11 +1692,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
  * v12：偵錯記錄格式 v2——保留／取出改為獨立的輕量項目；摘要與重放支援 v2，並可讀 v1 記錄檔（自動轉換）。
  * v13：合併上推加入「接觸顛倒」代價（core.js liftAfterMerge）；代價固定（不開放修改）；記錄摘要顯示避開／仍顛倒的次數。
  * v16：下方市名排版——一左一右、文字背對的兩個市名，導引線再近也放在同一排（不再因此掉到第二排）。
- * v17：復原最後一次放下（頂欄按鈕、Ctrl+Z／⌘Z）；次數有限，合併次數每到 5 的倍數 +1。 */
+ * v17：復原最後一次放下（頂欄按鈕、Ctrl+Z／⌘Z）；次數有限，合併次數每到 5 的倍數 +1。
+ * v18：操作與顯示的修正（頂欄按鈕焦點、只接受滑鼠左鍵、切換視窗時放開方向鍵、冷卻中不能取出、
+ *      換外觀時重畫小畫布、容器寬度下限）。詳細與更早的版本沿革見 CHANGELOG.md。 */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  // 儲存鍵名沿用 v9：v10 存檔格式不變，可接續 v9 的進度與調參
+  // 儲存鍵名沿用 v9：v10 起存檔格式不變（v17 只加選用欄位），可接續 v9 的進度與調參
   const SAVE_KEY = "tw-puzzle-save-v9", PARAM_KEY = "tw-puzzle-params-v9", LOG_KEY = "tw-puzzle-log-v9", DEBUG_KEY = "tw-puzzle-debug";
   const store = {
     get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
@@ -1700,7 +1708,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
   // 調參視窗欄位：[參數名, 標籤, 最小, 最大, 步進]。速度類單位為 m/s（1 m = 100 px）；地圖、澎湖規則、拍打模式也可在選單的「新局設定」更改
   const SETTINGS = [
-    ["containerW", "容器寬度 px", 500, 1600, 10],
+    ["containerW", "容器寬度 px（至少 800）", 800, 1600, 10],
     ["deadlineH", "淘汰線高度 px", 900, 2000, 10],
     ["gravity", "重力 px/s²", 600, 4000, 100],
     ["friction", "摩擦力", 0, 1.5, 0.05],
@@ -1718,6 +1726,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     ["undoStart", "每局初始復原次數", 0, 20, 1],
   ];
   const DEFAULTS = window.TPCore.DEFAULTS;
+  // 容器寬度下限（v18）：整塊拼好的台灣最窄的轉角約 475 px 寬，含澎湖（依真實相對位置合併）約 693 px；
+  // 合併時要求寬度 ≤ 容器寬 − 6。兩種地圖共用一個下限 800，留足餘裕。開新局時套用，讀入舊存檔時不改（存檔要求參數相同）
+  const MIN_CONTAINER_W = 800;
+  function fitParams(p) {
+    const w = "containerW" in p ? p.containerW : DEFAULTS.containerW;
+    return w >= MIN_CONTAINER_W ? p : Object.assign({}, p, { containerW: MIN_CONTAINER_W });
+  }
   let userParams = Object.assign({}, store.get(PARAM_KEY) || {});
   delete userParams.liftContactBias;   // v13：接觸顛倒代價固定用預設值，不開放修改
 
@@ -1743,6 +1758,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     theme.cat = { "縣": g("--cat-county"), "直轄市": g("--cat-metro"), "市": g("--cat-city") };
     for (const n of ["cv-text", "edge-out", "edge-in", "cv-drop", "cv-water", "cv-water-deep", "cv-wall", "cv-danger", "guide", "guide-text", "hint", "ghost"]) theme[n] = g("--" + n);
     theme.font = g("--font-ui");
+    theme.gen = (theme.gen || 0) + 1;   // 主迴圈看到變化就重畫「下一塊」「保留區」與開著的結果圖（v18）
   }
   readTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readTheme);
@@ -1787,7 +1803,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     canvas.width = Math.round(view.cssW * view.dpr); canvas.height = Math.round(view.cssH * view.dpr);
     layoutView();
   }
-  const PAD_TOP = 34, PAD_BOT = 30, WALL = 14;   // css px；上方留給手上拼圖的市名，下方留給已落下的市名
+  const PAD_TOP = 34, PAD_BOT = 30, WALL = 14;   // PAD_TOP／PAD_BOT 為 css px（上方留給手上拼圖的市名，下方留給已落下的市名）；WALL 為牆與地板的厚度，世界座標 px
   function layoutView() {
     if (!core) return;
     const P = core.P;
@@ -1804,6 +1820,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     layoutView();
   }
   function startNew(seed) {
+    const fit = fitParams(userParams);
+    if (fit !== userParams) { userParams = fit; store.set(PARAM_KEY, userParams); }
     makeCore(); core.newGame(seed);
     store.del(SAVE_KEY); store.del(LOG_KEY); logSig = ""; rings.length = 0; shakeAmp = 0; stuckShown = false;
     hideOverlay("ovEnd"); lastSlotKey = "x"; lastNextKey = ""; slotHint = false; setMsg("");
@@ -1857,7 +1875,8 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   const tipOnce = (k) => { if (tips[k]) return false; tips[k] = true; store.set(TIPS_KEY, tips); return true; };
   let touchN = store.get(TOUCH_KEY) || 0;   // 觸控放下／取消的累計次數；前 5 次在畫布上顯示「拖到紅線以上放開＝取消」
   function showOverlay(id) { $(id).hidden = false; }
-  function hideOverlay(id) { $(id).hidden = true; }
+  // 關閉視窗時，若焦點在視窗裡就移出（v18）：否則空白鍵、Enter 會作用在已隱藏或背後的按鈕上
+  function hideOverlay(id) { const el = $(id), a = document.activeElement; if (a && el.contains(a)) a.blur(); el.hidden = true; }
   const fmtTime = (t) => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
   // 結果圖的區塊色：先用和縣市三色（綠 #66c2a5、橘 #fc8d62、藍紫 #8da0cb）不同色系的 ColorBrewer 色，
   // 不夠再退回縣市三色；地理上相鄰的區塊盡量不同色
@@ -1958,12 +1977,13 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   function updateCancel(e) { cancelZone = pressed && pressType !== "mouse" && !!core && worldY(e.clientY) < core.deadlineY(); }
   canvas.addEventListener("pointermove", (e) => { if (core) core.setHeldX(worldX(e.clientX)); if (pressed) updateCancel(e); });
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;   // 滑鼠只接受左鍵（v18）；右鍵、中鍵不放下
     pressed = true; pressType = e.pointerType || "mouse"; canvas.setPointerCapture(e.pointerId);
     if (core) core.setHeldX(worldX(e.clientX));
     updateCancel(e);
   });
   canvas.addEventListener("pointerup", (e) => {
-    if (!pressed) return;
+    if (!pressed || (e.pointerType === "mouse" && e.button !== 0)) return;
     updateCancel(e);
     const cancelled = cancelZone;
     pressed = false; cancelZone = false;
@@ -1971,6 +1991,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     if (core) { core.setHeldX(worldX(e.clientX)); if (cancelled) setMsg("已取消，拼圖沒有放下。"); else doDrop(); }
   });
   canvas.addEventListener("pointercancel", () => { pressed = false; cancelZone = false; });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());   // 畫布上不跳出右鍵選單
   // 任何視窗打開時遊戲暫停：不推進模擬，也不接受放下、拍打、保留（側欄按鈕在視窗外仍可點，所以這裡要擋）
   const paused = () => anyOverlayOpen();
   function doDrop() { if (!paused() && core.drop()) saveNow(); }
@@ -2041,13 +2062,17 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     if (k === "ArrowLeft" || k === "a") keys.left = false;
     else if (k === "ArrowRight" || k === "d") keys.right = false;
   });
+  // 按住方向鍵時切換視窗或分頁，keyup 不會送到這裡：一律視為放開（v18）
+  const releaseKeys = () => { keys.left = false; keys.right = false; };
+  window.addEventListener("blur", releaseKeys);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) releaseKeys(); });
   const press = (id, fn) => $(id).addEventListener("click", (e) => { fn(e); e.currentTarget.blur(); });
   press("btnShakeL", () => { lastDir = -1; doShake(-1); });
   press("btnShakeR", () => { lastDir = 1; doShake(1); });
   press("btnShakeA", () => doShake(core.nextShakeDir()));
   press("btnHold", doHoldToggle);
   // 選單：打開即暫停（showEnd）
-  $("btnMenu").addEventListener("click", showEnd);
+  $("btnMenu").addEventListener("click", (e) => { e.currentTarget.blur(); showEnd(); });
   let confirmFn = null;
   function askConfirm(title, body, yes, fn) { $("cfTitle").textContent = title; $("cfBody").textContent = body; $("cfYes").textContent = yes; confirmFn = fn; showOverlay("ovConfirm"); }
   $("cfNo").addEventListener("click", () => hideOverlay("ovConfirm"));
@@ -2119,7 +2144,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     }
   }
   $("selTheme").addEventListener("change", (e) => { const v = e.target.value; store.set(THEME_KEY, v); applyTheme(v); });
-  $("btnSettings").addEventListener("click", () => { buildFields(); $("selTheme").value = store.get(THEME_KEY) || "system"; $("chkDebug").checked = debugOn(); showOverlay("ovSettings"); });
+  $("btnSettings").addEventListener("click", (e) => { e.currentTarget.blur(); buildFields(); $("selTheme").value = store.get(THEME_KEY) || "system"; $("chkDebug").checked = debugOn(); showOverlay("ovSettings"); });
   $("stCancel").addEventListener("click", () => hideOverlay("ovSettings"));
   $("stReset").addEventListener("click", () => { userParams = {}; store.del(PARAM_KEY); buildFields(); });
   $("stApply").addEventListener("click", () => {
@@ -2131,6 +2156,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
       next[key] = key === "shakeAlt" ? !!v : v;
     }
     for (const k of ["penghu", "penghuLink"]) if (k in userParams) next[k] = userParams[k];   // 地圖與澎湖規則不在調參欄位裡，套用時保留
+    // 舊設定的寬度低於下限時，由 startNew 的 fitParams 補足
     userParams = next; store.set(PARAM_KEY, userParams);
     hideOverlay("ovSettings"); startNew(); syncModeUi(); resize();
   });
@@ -2552,7 +2578,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
   }
 
   // ------------------------------------------------------------ 主迴圈
-  let last = 0, lastNextKey = "", hudT = 0;
+  let last = 0, lastNextKey = "", hudT = 0, themeGen = 0;
   function frame(ts) {
     const dt = last ? (ts - last) / 1000 : 0; last = ts;
     if (core) {
@@ -2582,6 +2608,10 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
 
       draw(ts);
       hudT += dt;
+      if (themeGen !== theme.gen) {
+        themeGen = theme.gen; lastNextKey = ""; lastSlotKey = "x";
+        if (!$("ovEnd").hidden) drawResultMap(core.groupsInfo());
+      }
       const nk = String(st.dropped) + ":" + st.held + ":" + st.queue.length + ":" + st.queue[0];
       if (nk !== lastNextKey) { lastNextKey = nk; drawNext(); }
       const sk = String(st.slot);
@@ -2879,7 +2909,7 @@ button.pulse { border-color: var(--accent); animation: holdPulse 1.2s ease-in-ou
     $("chkSound").checked = on; $("rngVol").value = String(Math.round(SFX.pref.vol * 100));
   }
   function toggleSound() { SFX.setOn(!SFX.pref.on); syncSoundUi(); }
-  $("btnSound").addEventListener("click", toggleSound);
+  $("btnSound").addEventListener("click", (e) => { toggleSound(); e.currentTarget.blur(); });
   $("chkSound").addEventListener("change", (e) => { SFX.setOn(e.target.checked); syncSoundUi(); });
   $("rngVol").addEventListener("input", (e) => SFX.setVol(Number(e.target.value) / 100));
   window.addEventListener("keydown", (e) => {
